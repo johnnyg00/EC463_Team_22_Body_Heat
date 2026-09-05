@@ -1,59 +1,59 @@
-# 02-Team Repo
-Template for team repo
+# EC463 Team 22 - Body Heat
 
-<p align="center">
-<img src="./images/thisismyteam.png" width="50%">
-</p>
-<p align="center">
-Replace this image with your team's photo here
-</p>
+**Wireless Wearable for Body Temperature Monitoring During Extreme Heat**
+
+BU ENG EC463/464 Senior Design, 2026-27. Group 22, Group A.
+
+A BLE skin-temperature wearable that flags heat-illness risk from rate-of-rise and reports to a supervisor dashboard.
+
+![Team photo placeholder](./images/thisismyteam.png)
+
+Replace this image with the team photo: single row, uncluttered background, landscape about 4800x960, 5:1, 72 DPI.
 
 ## Team links
-- [Team Google Drive]()
-- [Team Board]()
 
-## Organization of this repo
+[Team Google Drive](https://drive.google.com/drive/u/3/folders/1wxCZ38JLhA3aLCa_SImvz6qaFUtCyiqN)
 
-This depends on your set of roles. Try these queries to set up
-your initial repo. You can always change this later.
+Team Board: to be added.
 
-- "What is a good organization of a repo for a team of two electrical engineers, two computer engineers, and one mechanical engineer? The team is undertaking the design and build of an embedded system and mechanicals for and electronic cat feeder project"
+## Team
 
+Johnny Garcia, @johnnyg00, Team Lead 1, Sep 3 to Oct 4.
 
-As in your individual repo, you can customize your based on your preferred tools (e.g., CAD
-software, IDE, etc.)
+Matthew Johnston, GitHub username pending.
 
-Example:
+Alexander Martinez, GitHub username pending.
 
-```
-├── hardware/                  # Electrical Engineering (EE)
-│   ├── schematics/            # Circuit diagrams, block diagrams, design files
-│   ├── pcb/                   # PCB layout, Gerber files, drill files
-│   ├── bom/                   # Bill of Materials (components, suppliers, costs)
-│   └── simulation/            # SPICE simulations, power budget models
-│
-├── firmware/                  # Computer Engineering (CE/Software)
-│   ├── src/                   # Source code (.c, .cpp, etc.)
-│   ├── include/               # Header files (.h, .hpp)
-│   ├── lib/                   # External libraries and vendor drivers
-│   ├── tests/                 # Unit tests, integration tests
-│   └── build/                 # Build output / configuration files (PlatformIO/CMake)
-│
-├── mechanical/                # Mechanical Engineering (ME)
-│   ├── cad/                   # 3D models (STEP, SLDPRT, Fusion 360 archives)
-│   ├── drawings/              # 2D technical drawings, dimensioned PDFs
-│   ├── 3d_print/              # STL/3MF files for fast prototyping
-│   └── renders/               # Product renders and enclosure mockups
-│
-├── docs/                      # Shared Project Documentation
-│   ├── architecture/          # Pinout tables, system wiring, block diagrams
-│   └── datasheets/            # Component PDFs (ICs, sensors, motors)
-│
-├── scripts/                   # Shared Automation & Utilities
-│   ├── flashing/              # Flash/programming scripts
-│   └── tests/                 # Hardware-in-the-loop / test automation scripts
-│
-├── .gitignore                 # Ignore generated files (binaries, Gerber zips, CAD locks)
-└── README.md                  # Project overview, setup guides, and team roles
-```
+Nathan Pearson, GitHub username pending.
 
+Krista Smith, GitHub username pending.
+
+Chengxiao Zhou, GitHub username pending.
+
+## Meeting rhythm, Group A
+
+Workshop: Tuesdays 5:30 to 7:00 PM, PHO 117.
+
+IDR: Thursdays 7:05 PM with Tom, PHO 113, first session 9/10.
+
+Office hours: Tuesday and Thursday 3:30 to 5:15 PM, PHO 113 or PHO 426.
+
+## Repo structure
+
+`hardware/` for schematics, pcb, bom and simulation.
+
+`firmware/` for src, include, lib, tests and build.
+
+`mechanical/` for cad, drawings, 3d_print and renders.
+
+`docs/` for architecture and datasheets.
+
+`scripts/` for flashing and test automation.
+
+Keep `docs/architecture/` current from day one: pin assignments, baud rates and message formats. Last year's teams named integration the hardest part of the project.
+
+## Design constraints
+
+LiPo batteries are banned from the lab and from all projects. Other lithium chemistry needs prior approval, a built-in BMS and a fireproof storage bag. Any battery needs a matching charger, a fuse within inches of the cell, an inline cut-off switch and proper connectors.
+
+Target materials budget is about $1,000.
