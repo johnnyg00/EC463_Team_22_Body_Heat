@@ -14,7 +14,7 @@ Replace this image with the team photo: single row, uncluttered background, land
 
 [Team Google Drive](https://drive.google.com/drive/u/3/folders/1wxCZ38JLhA3aLCa_SImvz6qaFUtCyiqN)
 
-Team Board: to be added.
+[Team Board](https://github.com/users/johnnyg00/projects/1)
 
 ## Team
 
