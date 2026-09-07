@@ -28,7 +28,7 @@ Nathan Pearson, GitHub username pending.
 
 Krista Smith, GitHub username pending.
 
-Chengxiao Zhou, GitHub username pending.
+Chengxiao Zhou, cxzhou@bu.edu, GitHub username pending.
 
 ## Meeting rhythm, Group A
 
