@@ -87,7 +87,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(name, ctype)
             if path == "/api/me":
                 return self._json({"user": user, "accounts": acc.list_accounts() if not user else None,
-                                   "strings": views.UI_STRINGS, "t": t})
+                                   "strings": views.UI_STRINGS, "t": t,
+                                   "states": [{"key": k, "label": l, "icon": i, "meaning": views.STATE_MEANING[k],
+                                               "staff": views.STAFF_GUIDANCE[k], "wearer": views.WEARER_GUIDANCE[k]}
+                                              for k, l, i in views.STATES]})
             if path == "/api/roster":
                 acc.require_staff(user, t, "GET /api/roster")
                 return self._json({"tiles": views.build_roster(hub, STATE["roster"], t),

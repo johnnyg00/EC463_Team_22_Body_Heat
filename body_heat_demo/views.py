@@ -43,7 +43,15 @@ UI_STRINGS = {
     "ack": "Acknowledge",
     "ack_note": "Acknowledging records your name and the time. The alert stays until the pod clears it.",
     "resume_notice": "Back below team setting",
-    "connection_lost": "Connection lost - values shown are not live",
+    "connection_lost": "Connection to the hub lost - values on screen are not live. Reconnecting...",
+    "all_ok": "Everyone is OK",
+    "need_attention": "need attention",
+    "needs_attention": "needs attention",
+    "got_it": "Got it",
+    "guide": "Guide",
+    "setup": "Setup",
+    "live": "Live",
+    "presenter": "Presenter tools",
     "storage_fault": "Storage fault",
     "consent_withdrawn_prompt": "Consent withdrawn - please stop the wearable",
     "export": "Export CSV",
@@ -59,9 +67,43 @@ FORBIDDEN_WORDS = sorted(set(_F1_FORBIDDEN) | {
 })
 
 
+# Plain-language next step per state, for staff (coach, trainer, crew
+# supervisor). Wellness wording only: practical actions, no clinical direction.
+STAFF_GUIDANCE = {
+    "absolute": "Check in with them now and help them cool down.",
+    "trend": "Keep an eye on them and plan a break soon.",
+    "no_signal": "Check the pod is switched on and within range of this screen.",
+    "detached": "Check the pod strap is snug against the skin.",
+    "low_battery": "Swap the batteries at the next break.",
+    "ok": "Nothing to do.",
+    "not_collecting": "They have not opted in. Record consent in Setup if they want to.",
+}
+# Same, written to the wearer.
+WEARER_GUIDANCE = {
+    "absolute": "Take a break and cool down. Your staff can see this too.",
+    "trend": "Your temperature is climbing quickly. Consider a break soon.",
+    "no_signal": "Your pod is not reaching the sideline screen. Check it is switched on.",
+    "detached": "Your pod may have slipped. Snug the strap against your skin.",
+    "low_battery": "Swap your pod batteries at the next break.",
+    "ok": "You are within your team's settings.",
+    "not_collecting": "Nothing is being recorded from your pod. Staff can record your consent if you opt in.",
+}
+# One line that explains each state in the on-screen guide.
+STATE_MEANING = {
+    "absolute": "Skin temperature is above the limit your team chose.",
+    "trend": "Skin temperature is climbing faster than the rate your team chose.",
+    "no_signal": "No packet from this pod for a minute. Last values are shown greyed.",
+    "detached": "The pod's contact ring is not touching skin, so it pauses its temperature decisions.",
+    "low_battery": "The pod reports its batteries are low.",
+    "ok": "Readings are arriving and the pod reports nothing to flag.",
+    "not_collecting": "This person has not opted in, so the hub records nothing from their pod.",
+}
+
+
 def all_user_facing_strings():
     """Everything a person can read on screen, for the AC-F4 audit."""
-    return list(STATE_LABELS.values()) + list(BADGE_LABELS.values()) + list(UI_STRINGS.values())
+    return (list(STATE_LABELS.values()) + list(BADGE_LABELS.values()) + list(UI_STRINGS.values())
+            + list(STAFF_GUIDANCE.values()) + list(WEARER_GUIDANCE.values()) + list(STATE_MEANING.values()))
 
 
 def primary_state(hub, device_id, t):

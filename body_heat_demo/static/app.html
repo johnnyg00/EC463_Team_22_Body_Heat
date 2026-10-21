@@ -3,20 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Body Heat</title>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <div id="banner" class="banner hidden" role="alert"></div>
 
 <header id="hdr" class="hdr hidden">
-  <div class="brand"><span class="logo">◉</span> <b>Body Heat</b> <span class="sub">Sideline wellness view</span></div>
-  <nav id="nav"></nav>
+  <div class="brand"><span class="logo" aria-hidden="true">◉</span><b>Body Heat</b></div>
+  <nav id="nav" aria-label="Main"></nav>
   <div class="hdr-right">
-    <span id="clock" class="chip mono">t = 0 s</span>
-    <span id="session-chip" class="chip">S-2026-10-22</span>
+    <span id="clock" class="chip mono" title="Seconds since the session started">0:00</span>
+    <button id="guide-btn" class="btn ghost" aria-haspopup="dialog">? Guide</button>
+    <button id="theme-btn" class="btn ghost" title="Switch between light (sunlight) and dark (evening) display">☼ Display</button>
     <span id="who" class="who"></span>
-    <button id="signout" class="btn small">Sign out</button>
+    <button id="signout" class="btn ghost">Sign out</button>
   </div>
 </header>
 
@@ -24,127 +27,158 @@
   <!-- Sign in -->
   <section id="screen-login" class="screen login">
     <div class="card login-card">
-      <h1><span class="logo">◉</span> Body Heat</h1>
-      <p class="muted" id="intended-use"></p>
-      <form id="login-form">
-        <label>Username <input name="username" autocomplete="username" required></label>
-        <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
-        <button class="btn primary" type="submit">Sign in</button>
-        <div id="login-err" class="err"></div>
+      <h1><span class="logo" aria-hidden="true">◉</span> Body Heat</h1>
+      <p class="lead" id="intended-use"></p>
+      <form id="login-form" autocomplete="on">
+        <label for="u">Username</label>
+        <input id="u" name="username" autocomplete="username" required>
+        <label for="p">Password</label>
+        <input id="p" name="password" type="password" autocomplete="current-password" required>
+        <button class="btn primary big" type="submit">Sign in</button>
+        <div id="login-err" class="err" aria-live="polite"></div>
       </form>
-      <details class="demo-accounts" open>
-        <summary>Demo accounts (synthetic data, password <code>demo</code>)</summary>
+      <details class="demo-accounts">
+        <summary>Demo accounts (all synthetic, password <code>demo</code>)</summary>
         <ul id="account-list"></ul>
       </details>
-      <p class="tiny muted">Hub-local web app. No internet, no cloud. Wearer names live only in this hub's roster; the radio carries device IDs.</p>
+      <p class="tiny muted">Runs on this hub only. No internet, no cloud. Names stay in this hub; the radio carries device IDs.</p>
     </div>
   </section>
 
-  <!-- Staff: roster -->
+  <!-- Staff: live -->
   <section id="screen-roster" class="screen hidden">
-    <div id="strip" class="strip"></div>
+    <div id="summary" class="summary" aria-live="polite"></div>
+    <div id="attention" class="attention"></div>
     <div id="notices" class="notices"></div>
-    <div id="grid" class="grid"></div>
+    <div id="grid" class="grid" role="list"></div>
   </section>
 
-  <!-- Staff: session / consent / export -->
+  <!-- Staff: setup -->
   <section id="screen-session" class="screen hidden scroll">
-    <div class="cols">
-      <div class="card">
-        <h2>Session</h2>
-        <div id="session-info"></div>
-        <h3>Team settings <span class="tiny muted">(set at session setup; live on the pods)</span></h3>
-        <table id="settings" class="kv"></table>
-        <div class="row gap">
-          <a id="export" class="btn" href="/api/export.csv">Export CSV</a>
-          <span class="tiny muted">Readings, alerts and consent records with timestamps and wearer IDs. Non-consenting wearers excluded.</span>
+    <div class="page">
+      <div class="cols">
+        <div class="card fixed">
+          <h2>This session</h2>
+          <div id="session-info"></div>
+          <h3>Team settings <span class="tiny muted">chosen at setup and sent to the pods</span></h3>
+          <table id="settings" class="kv"></table>
+          <h3>Export</h3>
+          <a id="export" class="btn" href="/api/export.csv">⬇ Download session CSV</a>
+          <p class="tiny muted">Readings, alerts and consent records with timestamps and wearer IDs. People who have not opted in are left out.</p>
+        </div>
+        <div class="card grow">
+          <h2>People wearing pods</h2>
+          <p class="muted">Consent is opt-in. Switch it off and the hub stops recording that pod within seconds. "Alerts only" hides their temperature on the live screen but still shows alerts.</p>
+          <table id="wearers" class="list"></table>
         </div>
       </div>
-      <div class="card grow">
-        <h2>Wearers and consent</h2>
-        <table id="wearers" class="list"></table>
+      <div class="cols">
+        <div class="card grow"><h2>Activity</h2><div id="event-log" class="log"></div></div>
+        <div class="card grow"><h2>Blocked requests</h2><p class="tiny muted">Every request is checked by the hub. Attempts to see someone else's data are listed here.</p><div id="denied-log" class="log"></div></div>
       </div>
-    </div>
-    <div class="cols">
-      <div class="card grow"><h2>Session log</h2><div id="event-log" class="log"></div></div>
-      <div class="card grow"><h2>Denied requests</h2><div id="denied-log" class="log"></div></div>
     </div>
   </section>
 
-  <!-- Staff: presenter controls -->
+  <!-- Staff: presenter -->
   <section id="screen-demo" class="screen hidden scroll">
-    <div class="cols">
-      <div class="card">
-        <h2>Demo controls <span class="tiny muted">presenter only; stands in for real pods</span></h2>
-        <label>Jersey <select id="demo-jersey"></select></label>
-        <div class="ctl-grid">
-          <button class="btn" data-ctl="rise">Start temperature climb</button>
-          <button class="btn" data-ctl="plateau">Ease back (plateau)</button>
-          <button class="btn" data-ctl="recover">Return to baseline</button>
-          <button class="btn" data-ctl="silence">Pod stops broadcasting</button>
-          <button class="btn" data-ctl="resume">Pod resumes</button>
-          <button class="btn" data-ctl="detach">Pod off skin</button>
-          <button class="btn" data-ctl="attach">Pod back on skin</button>
-          <button class="btn" data-ctl="low_battery">Low battery</button>
+    <div class="page">
+      <div class="cols">
+        <div class="card fixed">
+          <h2>Presenter tools <span class="tiny muted">demo only; stands in for real pods</span></h2>
+          <label for="demo-jersey">Person</label>
+          <select id="demo-jersey"></select>
+          <h3>Make something happen</h3>
+          <div class="ctl-grid">
+            <button class="btn" data-ctl="rise">Temperature climbs</button>
+            <button class="btn" data-ctl="plateau">Eases back</button>
+            <button class="btn" data-ctl="recover">Back to normal</button>
+            <button class="btn" data-ctl="silence">Pod goes quiet</button>
+            <button class="btn" data-ctl="resume">Pod comes back</button>
+            <button class="btn" data-ctl="detach">Pod slips off skin</button>
+            <button class="btn" data-ctl="attach">Pod back on skin</button>
+            <button class="btn" data-ctl="low_battery">Batteries run low</button>
+          </div>
+          <h3>Radio and storage faults</h3>
+          <div class="ctl-grid">
+            <button class="btn" data-ctl="replay">Replay an old packet</button>
+            <button class="btn" data-ctl="altered">Send a tampered packet</button>
+            <button class="btn" data-ctl="unknown">Unknown pod broadcasts</button>
+            <button class="btn" data-ctl="storage_fault">Disk write failure</button>
+            <button class="btn" data-ctl="storage_ok">Disk recovered</button>
+            <button class="btn" data-ctl="autoplay" id="autoplay-btn">Scripted scenario: on</button>
+          </div>
+          <p class="tiny muted">Script: 0:05 #18 low battery · 0:10 #24 quiet (no signal at 1:10) · 0:15 #11 climbs (rising, then above setting) · 0:40–1:50 #7 off skin · 2:30 replay/tampered/unknown packets · 2:50 #11 eases back.</p>
         </div>
-        <h3>Radio and storage faults</h3>
-        <div class="ctl-grid">
-          <button class="btn" data-ctl="replay">Replay an old packet</button>
-          <button class="btn" data-ctl="altered">Send an altered packet</button>
-          <button class="btn" data-ctl="unknown">Unknown device broadcasts</button>
-          <button class="btn" data-ctl="storage_fault">Disk write failure</button>
-          <button class="btn" data-ctl="storage_ok">Disk recovered</button>
-          <button class="btn" data-ctl="autoplay" id="autoplay-btn">Scripted scenario: on</button>
+        <div class="card grow">
+          <h2>Hub counters</h2>
+          <table id="counters" class="kv"></table>
+          <h3>Presenter log</h3>
+          <div id="demo-log" class="log"></div>
         </div>
-        <p class="tiny muted">Scripted timeline: t=5 #18 low battery · t=10 #24 silent (no signal at t=70) · t=15 #11 climbs (trend, then above setting) · t=40–110 #7 off skin · t=150 replay/altered/unknown packets · t=170 #11 eases back.</p>
-      </div>
-      <div class="card grow">
-        <h2>Hub counters</h2>
-        <table id="counters" class="kv"></table>
-        <h3>Demo log</h3>
-        <div id="demo-log" class="log"></div>
       </div>
     </div>
   </section>
 
-  <!-- Athlete: own session -->
+  <!-- Athlete -->
   <section id="screen-athlete" class="screen hidden scroll">
-    <div class="cols">
-      <div class="card">
-        <h2>My session</h2>
-        <div id="athlete-tile"></div>
-        <div id="athlete-consent"></div>
-        <h3>Access check</h3>
-        <p class="tiny muted">Every request is checked in the hub. Try asking for a teammate's data:</p>
-        <button class="btn" id="try-peer">Request jersey 7's data</button>
-        <div id="peer-result" class="err"></div>
-      </div>
-      <div class="card grow">
-        <h2>Today</h2>
-        <div id="athlete-chart"></div>
+    <div class="page narrow">
+      <h2 id="athlete-hello" class="hello"></h2>
+      <div id="athlete-status" class="status-card"></div>
+      <div class="cols">
+        <div class="card grow">
+          <h3>Today</h3>
+          <div id="athlete-chart"></div>
+        </div>
+        <div class="card fixed">
+          <h3>Your consent</h3>
+          <div id="athlete-consent"></div>
+          <h3>Who can see this</h3>
+          <p class="muted">Only you and your team's staff. The hub checks every request. Try it:</p>
+          <button class="btn" id="try-peer">Ask for #7's data</button>
+          <div id="peer-result" class="err" aria-live="polite"></div>
+        </div>
       </div>
     </div>
   </section>
 </main>
 
-<!-- Detail modal -->
-<div id="modal" class="modal hidden">
+<!-- Person detail -->
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="detail-title">
   <div class="modal-card">
     <div class="row between">
       <h2 id="detail-title"></h2>
-      <button class="btn small" id="detail-close">Close</button>
+      <button class="btn ghost" id="detail-close" aria-label="Close">✕ Close</button>
     </div>
     <div class="cols">
       <div class="detail-left">
         <div id="detail-tile"></div>
-        <div id="detail-actions" class="row gap wrap"></div>
-        <h3>Events</h3>
+        <div id="detail-guidance" class="guidance"></div>
+        <div id="detail-actions" class="stack"></div>
+        <h3>What happened</h3>
         <div id="detail-events" class="log"></div>
       </div>
       <div class="grow" id="detail-chart"></div>
     </div>
   </div>
 </div>
+
+<!-- Guide -->
+<div id="guide" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+  <div class="modal-card narrow-card">
+    <div class="row between"><h2 id="guide-title">How to read this screen</h2><button class="btn ghost" id="guide-close" aria-label="Close">✕ Close</button></div>
+    <p class="muted">Each person has one card. The card's colour, symbol and words all say the same thing, so it reads in bright sun or in black and white. Cards never move, so you can find the same person in the same place.</p>
+    <table id="guide-table" class="guide-table"></table>
+    <h3>Three things to remember</h3>
+    <ul class="remember">
+      <li><b>The pod decides.</b> Alerts come from the pod on the person's arm, using your team's settings. This screen only shows them.</li>
+      <li><b>"Got it" is a note, not a dismissal.</b> It records your name and the time. The alert stays until the pod sees the person is back within the settings.</li>
+      <li><b>Consent first.</b> The hub records nothing from a pod until that person opts in, and stops within seconds if they opt out.</li>
+    </ul>
+    <p class="tiny muted">Body Heat is a general wellness product. It compares skin temperature with the settings your team chose. It does not diagnose anything.</p>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden" role="status"></div>
 
 <script src="/static/app.js"></script>
 </body>
