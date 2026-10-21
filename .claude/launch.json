@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "body-heat-demo",
+      "runtimeExecutable": "python3.12",
+      "runtimeArgs": ["-m", "body_heat_demo.server", "--port", "8463"],
+      "port": 8463
+    }
+  ]
+}

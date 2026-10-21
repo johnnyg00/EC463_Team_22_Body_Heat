@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Body Heat</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="banner" class="banner hidden" role="alert"></div>
+
+<header id="hdr" class="hdr hidden">
+  <div class="brand"><span class="logo">◉</span> <b>Body Heat</b> <span class="sub">Sideline wellness view</span></div>
+  <nav id="nav"></nav>
+  <div class="hdr-right">
+    <span id="clock" class="chip mono">t = 0 s</span>
+    <span id="session-chip" class="chip">S-2026-10-22</span>
+    <span id="who" class="who"></span>
+    <button id="signout" class="btn small">Sign out</button>
+  </div>
+</header>
+
+<main id="main">
+  <!-- Sign in -->
+  <section id="screen-login" class="screen login">
+    <div class="card login-card">
+      <h1><span class="logo">◉</span> Body Heat</h1>
+      <p class="muted" id="intended-use"></p>
+      <form id="login-form">
+        <label>Username <input name="username" autocomplete="username" required></label>
+        <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+        <button class="btn primary" type="submit">Sign in</button>
+        <div id="login-err" class="err"></div>
+      </form>
+      <details class="demo-accounts" open>
+        <summary>Demo accounts (synthetic data, password <code>demo</code>)</summary>
+        <ul id="account-list"></ul>
+      </details>
+      <p class="tiny muted">Hub-local web app. No internet, no cloud. Wearer names live only in this hub's roster; the radio carries device IDs.</p>
+    </div>
+  </section>
+
+  <!-- Staff: roster -->
+  <section id="screen-roster" class="screen hidden">
+    <div id="strip" class="strip"></div>
+    <div id="notices" class="notices"></div>
+    <div id="grid" class="grid"></div>
+  </section>
+
+  <!-- Staff: session / consent / export -->
+  <section id="screen-session" class="screen hidden scroll">
+    <div class="cols">
+      <div class="card">
+        <h2>Session</h2>
+        <div id="session-info"></div>
+        <h3>Team settings <span class="tiny muted">(set at session setup; live on the pods)</span></h3>
+        <table id="settings" class="kv"></table>
+        <div class="row gap">
+          <a id="export" class="btn" href="/api/export.csv">Export CSV</a>
+          <span class="tiny muted">Readings, alerts and consent records with timestamps and wearer IDs. Non-consenting wearers excluded.</span>
+        </div>
+      </div>
+      <div class="card grow">
+        <h2>Wearers and consent</h2>
+        <table id="wearers" class="list"></table>
+      </div>
+    </div>
+    <div class="cols">
+      <div class="card grow"><h2>Session log</h2><div id="event-log" class="log"></div></div>
+      <div class="card grow"><h2>Denied requests</h2><div id="denied-log" class="log"></div></div>
+    </div>
+  </section>
+
+  <!-- Staff: presenter controls -->
+  <section id="screen-demo" class="screen hidden scroll">
+    <div class="cols">
+      <div class="card">
+        <h2>Demo controls <span class="tiny muted">presenter only; stands in for real pods</span></h2>
+        <label>Jersey <select id="demo-jersey"></select></label>
+        <div class="ctl-grid">
+          <button class="btn" data-ctl="rise">Start temperature climb</button>
+          <button class="btn" data-ctl="plateau">Ease back (plateau)</button>
+          <button class="btn" data-ctl="recover">Return to baseline</button>
+          <button class="btn" data-ctl="silence">Pod stops broadcasting</button>
+          <button class="btn" data-ctl="resume">Pod resumes</button>
+          <button class="btn" data-ctl="detach">Pod off skin</button>
+          <button class="btn" data-ctl="attach">Pod back on skin</button>
+          <button class="btn" data-ctl="low_battery">Low battery</button>
+        </div>
+        <h3>Radio and storage faults</h3>
+        <div class="ctl-grid">
+          <button class="btn" data-ctl="replay">Replay an old packet</button>
+          <button class="btn" data-ctl="altered">Send an altered packet</button>
+          <button class="btn" data-ctl="unknown">Unknown device broadcasts</button>
+          <button class="btn" data-ctl="storage_fault">Disk write failure</button>
+          <button class="btn" data-ctl="storage_ok">Disk recovered</button>
+          <button class="btn" data-ctl="autoplay" id="autoplay-btn">Scripted scenario: on</button>
+        </div>
+        <p class="tiny muted">Scripted timeline: t=5 #18 low battery · t=10 #24 silent (no signal at t=70) · t=15 #11 climbs (trend, then above setting) · t=40–110 #7 off skin · t=150 replay/altered/unknown packets · t=170 #11 eases back.</p>
+      </div>
+      <div class="card grow">
+        <h2>Hub counters</h2>
+        <table id="counters" class="kv"></table>
+        <h3>Demo log</h3>
+        <div id="demo-log" class="log"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Athlete: own session -->
+  <section id="screen-athlete" class="screen hidden scroll">
+    <div class="cols">
+      <div class="card">
+        <h2>My session</h2>
+        <div id="athlete-tile"></div>
+        <div id="athlete-consent"></div>
+        <h3>Access check</h3>
+        <p class="tiny muted">Every request is checked in the hub. Try asking for a teammate's data:</p>
+        <button class="btn" id="try-peer">Request jersey 7's data</button>
+        <div id="peer-result" class="err"></div>
+      </div>
+      <div class="card grow">
+        <h2>Today</h2>
+        <div id="athlete-chart"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Detail modal -->
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="row between">
+      <h2 id="detail-title"></h2>
+      <button class="btn small" id="detail-close">Close</button>
+    </div>
+    <div class="cols">
+      <div class="detail-left">
+        <div id="detail-tile"></div>
+        <div id="detail-actions" class="row gap wrap"></div>
+        <h3>Events</h3>
+        <div id="detail-events" class="log"></div>
+      </div>
+      <div class="grow" id="detail-chart"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
