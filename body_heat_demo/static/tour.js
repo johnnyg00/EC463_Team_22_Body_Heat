@@ -97,6 +97,7 @@
   }
   async function go(n) {
     if (n < 0 || n >= steps.length) return;
+    if (ui.querySelector(".tour-card").classList.contains("busy")) return;
     const prev = steps[i];
     if (prev && prev.after && n > i) await prev.after();
     i = n;
@@ -120,6 +121,7 @@
   async function next() {
     const step = steps[i];
     const nextBtn = ui.querySelector(".tour-next");
+    if (!step || nextBtn.disabled || ui.querySelector(".tour-card").classList.contains("busy")) return;
     if (step.action) {
       nextBtn.disabled = true; nextBtn.textContent = "Working…";
       try { await step.action(); } catch (e) { console.warn(e); }
