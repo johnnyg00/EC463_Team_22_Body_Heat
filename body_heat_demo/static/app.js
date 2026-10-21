@@ -49,7 +49,13 @@
     screens.forEach(([id, label]) => { const b = el("button", "", label); b.dataset.screen = id; b.onclick = () => show(id); nav.appendChild(b); });
     show(screens[0][0]);
     connect();
-    if (me.role === "staff") { try { if (!localStorage.getItem("bh-seen-guide")) { openGuide(); localStorage.setItem("bh-seen-guide", "1"); } } catch (e) {} }
+    window.BH = { show, openDetail, closeDetail, api, toast, me: () => me };
+    const startTour = () => { $("#welcome").classList.add("hidden"); if (window.BHTour) window.BHTour.start(window.BH, me.role); };
+    $("#tour-btn").onclick = startTour;
+    $("#welcome-tour").onclick = startTour;
+    $("#welcome-skip").onclick = () => { $("#welcome").classList.add("hidden"); try { localStorage.setItem("bh-toured", "1"); } catch (e) {} };
+    let toured = false; try { toured = !!localStorage.getItem("bh-toured"); } catch (e) {}
+    if (!toured) setTimeout(() => $("#welcome").classList.remove("hidden"), 600);
   }
   function show(id) {
     screen = id;

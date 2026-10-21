@@ -244,3 +244,37 @@ table.list td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical
   .grid { grid-template-columns: repeat(4, 1fr); grid-template-rows: none; grid-auto-rows: 118px; height: auto; }
   .screen { overflow: auto; }
 }
+
+/* ---------- guided tour ---------- */
+.tour-launch { color: var(--accent); font-weight: 700; }
+.welcome-card { width: min(640px, 96vw); text-align: center; }
+.welcome-card .row { justify-content: center; margin-top: 8px; }
+.welcome-card .btn.big { width: auto; padding: 0 28px; margin-top: 0; }
+.welcome-art { display: flex; justify-content: center; gap: 10px; margin-bottom: 12px; }
+.w-tile { width: 54px; height: 54px; border-radius: 12px; display: grid; place-items: center; font-size: 26px; font-weight: 800; border: 2px solid; animation: w-pop .5s ease both; }
+.w-tile:nth-child(2) { animation-delay: .1s } .w-tile:nth-child(3) { animation-delay: .2s } .w-tile:nth-child(4) { animation-delay: .3s }
+.w-tile.ok { color: var(--ok); background: var(--ok-bg); border-color: var(--ok); }
+.w-tile.trend { color: var(--trend); background: var(--trend-bg); border-color: var(--trend); }
+.w-tile.absolute { color: var(--abs); background: var(--abs-bg); border-color: var(--abs); }
+.w-tile.no_signal { color: var(--nosig); background: var(--nosig-bg); border-color: var(--nosig); border-style: dashed; }
+@keyframes w-pop { from { transform: scale(.6); opacity: 0 } to { transform: none; opacity: 1 } }
+
+.tour { position: fixed; inset: 0; z-index: 80; pointer-events: none; }
+.tour-spot { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(10, 14, 20, .62), 0 0 0 3px var(--focus), 0 0 28px rgba(255, 183, 3, .55); transition: left .35s ease, top .35s ease, width .35s ease, height .35s ease, opacity .3s; pointer-events: none; }
+.tour-card { position: fixed; width: 420px; max-width: calc(100vw - 24px); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px 16px; box-shadow: 0 24px 64px rgba(0,0,0,.4); pointer-events: auto; transition: left .35s ease, top .35s ease, opacity .2s; animation: tour-in .3s ease; }
+.tour-card.center { left: 50% !important; top: 50% !important; transform: translate(-50%, -50%); width: 520px; }
+.tour-card.busy { opacity: .6; }
+.tour-card h3 { margin: 6px 0 6px; font-size: 21px; color: var(--fg); text-transform: none; letter-spacing: 0; }
+.tour-card p { margin: 0 0 14px; font-size: 16px; line-height: 1.45; }
+.tour-progress { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.tour-dots { display: flex; gap: 4px; }
+.tour-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); display: inline-block; }
+.tour-dots i.done { background: var(--accent); opacity: .5; }
+.tour-dots i.on { background: var(--accent); transform: scale(1.3); }
+.tour-btns { display: flex; align-items: center; gap: 8px; }
+.tour-btns .btn { min-height: 42px; }
+.tour-btns .btn:disabled { opacity: .5; cursor: default; }
+@keyframes tour-in { from { opacity: 0; transform: translateY(8px) } }
+.tour-card.center { animation: none; }
+@media (prefers-reduced-motion: reduce) { .tour-spot, .tour-card, .w-tile { transition: none; animation: none; } }
+.tour-spot.bare { box-shadow: 0 0 0 9999px rgba(10, 14, 20, .62); }

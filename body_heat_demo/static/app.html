@@ -16,6 +16,7 @@
   <nav id="nav" aria-label="Main"></nav>
   <div class="hdr-right">
     <span id="clock" class="chip mono" title="Seconds since the session started">0:00</span>
+    <button id="tour-btn" class="btn ghost tour-launch">▶ Tour</button>
     <button id="guide-btn" class="btn ghost" aria-haspopup="dialog">? Guide</button>
     <button id="theme-btn" class="btn ghost" title="Switch between light (sunlight) and dark (evening) display">☼ Display</button>
     <span id="who" class="who"></span>
@@ -178,8 +179,22 @@
   </div>
 </div>
 
+<!-- Welcome after sign-in -->
+<div id="welcome" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+  <div class="modal-card welcome-card">
+    <div class="welcome-art" aria-hidden="true"><span class="w-tile ok">✓</span><span class="w-tile trend">↗</span><span class="w-tile absolute">▲</span><span class="w-tile no_signal">⊘</span></div>
+    <h2 id="welcome-title">New here? Take the two-minute tour</h2>
+    <p class="muted">It walks through the live screen, raises a real alert so you can watch the hub react, and shows where consent, export and the guide live. You can leave at any point.</p>
+    <div class="row gap">
+      <button class="btn primary big" id="welcome-tour">▶ Start the tour</button>
+      <button class="btn ghost" id="welcome-skip">Skip for now</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden" role="status"></div>
 
 <script src="/static/app.js"></script>
+<script src="/static/tour.js"></script>
 </body>
 </html>

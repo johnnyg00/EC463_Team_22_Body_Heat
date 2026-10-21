@@ -34,6 +34,17 @@ Sign in (password `demo` for every account):
 
     python3 -m pytest tests/ -v       # F1 tests + demo prototype tests
 
+## Guided tour
+
+After signing in, a welcome card offers a two-minute guided tour (also the
+**▶ Tour** button in the header, any time). It spotlights each part of the
+screen and makes real things happen as it goes: it raises an alert on #12
+(the pod reads above the limit and decides for itself), records "Got it",
+opens the chart, visits Setup, sends a tampered packet and shows the hub
+reject and count it, then puts #12 back and lets the pod clear its own
+alert. Keyboard: → or Enter next, ← back, Esc leave. Wearer accounts get a
+shorter tour of their own view. Code: `static/tour.js`.
+
 ## What the presentation shows
 
 Scripted timeline (also triggerable from **Demo controls**):

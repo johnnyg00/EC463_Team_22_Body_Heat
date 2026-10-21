@@ -185,6 +185,12 @@ class Engine:
             pod.rise_cap_c = min(pod.rise_cap_c, 1.0)          # eases back below the setting
         elif action == "recover":
             pod.rise_started_at = None
+        elif action == "spike":
+            # Tour helper: the pod's next sample reads above the team limit, so the
+            # pod itself raises the absolute alert on its next broadcast.
+            pod.base_skin_c += 3.0; pod._last = None
+        elif action == "unspike":
+            pod.base_skin_c -= 3.0; pod._last = None
         elif action == "silence":
             pod.silent = True
         elif action == "resume":
