@@ -357,26 +357,31 @@ def test_default_budgets_cover_scenario_cadence_with_headroom():
     assert model.MAX_CALLS_SESSION >= 30 * (opportunities + 1)
 
 
+def test_recording_holds_only_hub_accepted_packets():
+    from analysis_scaffold.record import record_session
+    header, packets = record_session()
+    # Same input the live hub gives analysis: no tampered, replayed, unknown or
+    # non-consenting wearer's packets (those are only counted in the header).
+    assert header["rejected_not_recorded"] == {
+        "authentication failed": 1, "no consent for pod-33": 200,
+        "replayed counter 145": 1, "unknown device pod-99": 1}
+    assert len(packets) == 5610
+    assert all(p["tag"] == "ok" for _, p in packets)
+    assert not {"pod-33", "pod-99"} & {p["device_id"] for _, p in packets}
+    last = {}
+    for _, p in packets:
+        assert p["counter"] > last.get(p["device_id"], -1)
+        last[p["device_id"]] = p["counter"]
+
+
 def test_demo_defaults_complete_all_paths_without_exhaustion(capsys):
-    import random
-    from body_heat_demo.engine import Engine, demo_roster
-    from analysis_scaffold.record import CaptureHub
+    from analysis_scaffold.record import record_session
     from analysis_scaffold.analyzer import PodRelayAnalyzer
-    state = random.getstate()
-    try:
-        random.seed(0)
-        hub = CaptureHub()
-        engine = Engine(hub, store=None, roster=demo_roster(), autoplay=True)
-        engine.t = 0
-        for _ in range(200):
-            engine.step()
-    finally:
-        random.setstate(state)
-    assert len(hub.packets) == 5813
+    _, packets = record_session()
     for analyzer in [PodRelayAnalyzer(), DeterministicAnalyzer(),
                      model.LLMAnalyzer(variant="explain"), model.LLMAnalyzer(variant="rolling")]:
         flags = []
-        for t, pkt in hub.packets:
+        for t, pkt in packets:
             flags.extend(analyzer.ingest(pkt, t))
         result = score(flags)
         assert result["missed_expected_events"] == 0
@@ -415,3 +420,49 @@ def test_unavailable_outputs_are_not_scored_as_normal(kind, capsys):
     assert result["scoring_status"] == "incomplete"
     assert result["missed_expected_events"] == 3
     assert "INCOMPLETE" in capsys.readouterr().out
+
+
+def _rising(analyzer):
+    for t, skin in [(0, 36.0), (10, 36.1), (20, 36.23), (30, 36.37), (40, 36.51), (50, 36.66)]:
+        yield from analyzer.ingest(packet(t, skin), t)
+
+
+def test_model_sees_rounded_numbers_and_a_faithful_echo_validates():
+    seen = []
+
+    class Echo(model.FakeLLMClient):
+        def _request(self, window):
+            seen.append(window)
+            return super()._request(window)
+
+    analyzer = model.LLMAnalyzer(Echo(), variant="rolling", score_every_s=0, max_calls_session=1000,
+                                 max_calls_per_wearer=1000, fail_cooldown_s=0)
+    flags = list(_rising(analyzer))
+    raw = ReadingWindows()
+    for t, skin in [(0, 36.0), (10, 36.1), (20, 36.23), (30, 36.37), (40, 36.51), (50, 36.66)]:
+        window = raw.add(packet(t, skin), t)
+    raw_slopes = [r["slope_c_per_5min"] for r in window["readings"]]
+    assert any(s != round(s, 2) for s in raw_slopes)          # the analyzer's own slopes are long floats
+    sent = [r["slope_c_per_5min"] for r in seen[-1]["readings"]]
+    assert sent == [round(s, 2) for s in raw_slopes]           # the model only ever sees 2 decimals
+    assert not analyzer.events                                  # so a digit-for-digit echo validates
+    assert [f.kind for f in flags] == ["trend"]
+
+
+def test_evidence_that_does_not_match_the_readings_is_unavailable():
+    class OffByTenth(model.FakeLLMClient):
+        def _request(self, window):
+            result, *usage = super()._request(window)
+            result["evidence"]["slope_c_per_5min"] += 0.1
+            return (result, *usage)
+
+    analyzer = model.LLMAnalyzer(OffByTenth(), variant="rolling", score_every_s=0, max_calls_session=1000,
+                                 max_calls_per_wearer=1000, fail_cooldown_s=0)
+    assert list(_rising(analyzer)) == []
+    assert {e["kind"] for e in analyzer.events} == {"analysis unavailable"}
+
+
+def test_call_budgets_formula_matches_scenario_defaults():
+    assert model.call_budgets(model.SCENARIO_DURATION_S, model.SCENARIO_WEARER_COUNT) == (
+        model.MAX_CALLS_PER_WEARER, model.MAX_CALLS_SESSION)
+    assert model.call_budgets(3600, 30) == (121, 3630)

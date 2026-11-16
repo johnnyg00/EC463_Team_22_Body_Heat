@@ -8,6 +8,7 @@
   const waitFor = async (fn, ms = 8000) => { const end = Date.now() + ms; while (Date.now() < end) { const v = fn(); if (v) return v; await sleep(200); } return null; };
 
   let steps = [], i = 0, active = false, ui = null, resizeHandler = null;
+  let spiked = false;              // the tour raised #TOUR_JERSEY's reading and has not restored it yet
 
   // ---------- step definitions ----------
   const TOUR_JERSEY = 12;          // #12 J. Costa is not used by the scripted scenario
@@ -20,7 +21,7 @@
       { title: "One card per person, and they never move", target: "#grid", body: "Thirty people fit on one laptop screen without scrolling. Cards stay in jersey order, so you can find the same person in the same place every time you look. They are never re-sorted by severity." },
       { title: "How to read a card", target: tileSel(2), place: "right", body: "Name, skin temperature to 0.1 °C, a trend arrow, a status in words with a symbol, and how fresh the reading is. The colour, the symbol and the words always agree, so it reads in sun glare or in black and white." },
       { title: "Who decides?", target: tileSel(2), place: "right", body: "Not this screen. Each pod on the arm decides its own alert, from a rate-of-rise rule and an absolute limit, and buzzes the wearer. The hub checks each packet and the screen only shows what the pod decided. That keeps the alert working even if this laptop is slow." },
-      { title: "Let's make something happen", target: tileSel(TOUR_JERSEY), place: "left", body: `Watch #${TOUR_JERSEY}. We'll have their pod read above the team's temperature limit. Within a second the pod raises the alert and this card changes.`, cta: "Raise an alert", action: async () => { await BH.api(`/api/demo/spike`, { jersey: TOUR_JERSEY }); await waitFor(() => $(tileSel(TOUR_JERSEY))?.classList.contains("absolute"), 6000); } },
+      { title: "Let's make something happen", target: tileSel(TOUR_JERSEY), place: "left", body: `Watch #${TOUR_JERSEY}. We'll have their pod read above the team's temperature limit. Within a second the pod raises the alert and this card changes.`, cta: "Raise an alert", action: async () => { await BH.api(`/api/demo/spike`, { jersey: TOUR_JERSEY }); spiked = true; await waitFor(() => $(tileSel(TOUR_JERSEY))?.classList.contains("absolute"), 6000); } },
       { title: "The card changed", target: tileSel(TOUR_JERSEY), place: "left", body: "Red, striped, with a triangle and the words \"Above team temperature setting\". The same alert appears in the attention panel above and in the summary line. All three happened within a second of the pod's decision." },
       { title: "The attention panel", target: ".alert-row", place: "below", body: "Newest alerts first, each with a plain next step: what to do, not a diagnosis. Press \"Got it\" to record that you have seen it. It records your name and the time.", before: async () => { await waitFor(() => $(".alert-row")); } },
       { title: "\"Got it\" is a note, not a dismissal", target: ".alert-row", place: "below", body: "The row moved below any new alerts and is dimmed, but it stays listed. Only the pod can clear its own alert, when it sees the wearer back within the settings. No one can silence an alert from this screen.", cta: "Press Got it for me", action: async () => { await BH.api("/api/ack", { device_id: `pod-${TOUR_JERSEY}` }); await waitFor(() => $(".alert-row.acked"), 5000); } },
@@ -33,7 +34,7 @@
       { title: "Rejected and counted", target: "#counters", place: "left", body: "\"Rejected: altered\" went up by one. Nothing on the live screen changed, because a rejected packet never updates a reading or refreshes a pod's signal status. The same happens for replayed packets and unknown pods." },
       { title: "Presenter tools", target: ".ctl-grid", place: "right", body: "For demonstrations only: these buttons stand in for real pods. Make someone's temperature climb, take a pod off skin, run the batteries down, or pull the disk. The scripted scenario on the right also runs by itself." },
       { title: "Help is one tap away", target: "#guide-btn", place: "below", body: "The Guide lists every card state with what it means and what to do. The Display button flips between the bright sunlight look and a dark look for evenings.", before: () => BH.show("roster") },
-      { title: "That's the tour", center: true, body: `We'll put #${TOUR_JERSEY}'s pod back to normal now; watch the pod clear its own alert and the card show "Back below team setting". Explore freely, replay the tour any time from the ▶ Tour button, or sign in as athlete11 to see what a wearer sees.`, cta: "Finish", action: async () => { await BH.api("/api/demo/unspike", { jersey: TOUR_JERSEY }); } },
+      { title: "That's the tour", center: true, body: `We'll put #${TOUR_JERSEY}'s pod back to normal now; watch the pod clear its own alert and the card show "Back below team setting". Explore freely, replay the tour any time from the ▶ Tour button, or sign in as athlete11 to see what a wearer sees.`, cta: "Finish", action: async () => { await BH.api("/api/demo/unspike", { jersey: TOUR_JERSEY }); spiked = false; } },
     ];
   }
 
@@ -142,6 +143,10 @@
     active = false;
     removeEventListener("resize", resizeHandler); document.removeEventListener("keydown", keys);
     ui.remove(); ui = null;
+    if (spiked && window.BH) {   // left early: put the pod back so the demo is not left with a raised reading
+      spiked = false;
+      window.BH.api("/api/demo/unspike", { jersey: TOUR_JERSEY }).catch(() => {});
+    }
     try { localStorage.setItem("bh-toured", "1"); } catch (e) {}
     if (window.BH) window.BH.toast("Tour ended. Replay it any time with ▶ Tour.");
   }

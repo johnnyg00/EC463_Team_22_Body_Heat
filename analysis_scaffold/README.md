@@ -2,7 +2,9 @@
 
 This package records one synthetic scenario and replays identical packets through
 an independent deterministic baseline, the existing pod-alert relay comparator,
-and both runtime-selectable model alternatives. The relay is not ground truth:
+and both runtime-selectable model alternatives. The recording holds only packets
+the hub accepts (same `DemoHub` ingest rules as the live server), so offline
+analyzers see exactly what live analysis sees. The relay is not ground truth:
 expectations come from scripted scenario labels.
 
 All three branches have the same code capability:
@@ -154,8 +156,15 @@ sub-50-call exploration target. Smaller limits can still be selected through the
 CLI and are covered by exhaustion tests. Budgets are finite guardrails, not a
 claim that real token/compute cost is acceptable.
 
-Final offline verification on each branch recorded 5,813 packets and passed 29
+Final offline verification on each experiment branch recorded 5,813 packets and passed 29
 existing plus 60 package tests (89 total), with all package files parsing.
+**Update on `analysis-integrated-demo`:** `record` now passes every packet through
+the same `DemoHub` ingest rules as the live server and records only accepted
+packets: 5,610, with 203 rejected packets counted in the header by reason (200
+from the non-consenting wearer, plus the scripted replayed, tampered and
+unknown-pod packets). Earlier recordings fed those to every analyzer. All flag
+timings below are unchanged; rolling now measures 195 fake calls (was 202,
+the difference being the non-consenting wearer), explain still 3.
 With defaults, a full 200s rolling replay makes **at most 240 calls; measured
 202**. Explain measured 3 calls; four-path replay measured 205 fake calls total.
 All positive expectations and all three negative windows PASS for all four
@@ -250,3 +259,12 @@ The local `body_heat_demo` app now uses this package directly on every accepted
 packet. Run `python3 -m body_heat_demo.server --analyzer deterministic` from the
 repo root; see [integrated demo instructions](../body_heat_demo/README.md#integrated-live-hub-analysis)
 for all four choices, explicit provider opt-in, staff visibility and standing labels.
+The live server sizes call budgets with `call_budgets(session seconds, wearers)`
+(the same formula as the scenario defaults) for `--session-minutes` (default 60),
+because a live session is not the 200 s replay. `LIVE_SAFETY_CEILING` is unchanged.
+
+Model inputs are rounded to `MODEL_DECIMALS` (2) before they are sent, and echoed
+evidence must match the newest reading within `EVIDENCE_TOLERANCE` (half the last
+decimal). Raw slopes are long binary floats (e.g. `4.90000000000002`) that a model
+cannot be expected to copy exactly; the fake client receives the same rounded
+window, so offline runs exercise this path too.

@@ -301,7 +301,13 @@
   }
 
   // ---------- athlete / wearer view ----------
-  async function loadAthlete() { $("#athlete-hello").textContent = `Hi ${me.display.split(" ")[0]}`; renderAthleteStatus(); await renderAthleteChart(); }
+  // A teammate's device for the access-control demo: never the signed-in athlete's own.
+  const peerDevice = () => me.device_id === "pod-07" ? "pod-11" : "pod-07";
+  async function loadAthlete() {
+    $("#athlete-hello").textContent = `Hi ${me.display.split(" ")[0]}`;
+    $("#try-peer").textContent = `Ask for #${Number(peerDevice().slice(4))}'s data`;
+    renderAthleteStatus(); await renderAthleteChart();
+  }
   function renderAthleteStatus() {
     const t = tiles.get(me.device_id); if (!t) return;
     const c = $("#athlete-status"); c.className = `status-card ${t.state}`; c.innerHTML = "";
@@ -318,7 +324,7 @@
     if (d.consented) { const b = el("button", "btn danger", S.withdraw); b.onclick = async () => { await api("/api/consent", { device_id: me.device_id, consented: false }); toast("Done. The hub stopped recording your pod. Staff have been asked to switch it off."); renderAthleteChart(); }; c.appendChild(b); }
   }
   $("#try-peer").onclick = async () => {
-    try { await api("/api/wearer/pod-07"); $("#peer-result").textContent = "Unexpected: allowed"; }
+    try { await api(`/api/wearer/${peerDevice()}`); $("#peer-result").textContent = "Unexpected: allowed"; }
     catch (e) { $("#peer-result").textContent = `The hub said no (${e.status}: ${e.message}) and wrote it in the log.`; }
   };
   setInterval(() => { if (screen === "athlete") renderAthleteChart(); }, 5000);

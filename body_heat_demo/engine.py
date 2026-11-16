@@ -51,6 +51,7 @@ class SyntheticPod:
         self.skin_contact = True
         self.rise_started_at = None     # t when a scripted climb began
         self.rise_cap_c = 1.2
+        self.spiked = False             # tour helper offset currently applied
         self._samples = []              # (t, skin_c)
         self._last = None
         self._last_t = -1
@@ -174,10 +175,15 @@ class Engine:
         with self._lock:
             return self._control(action, jersey, user)
 
+    _POD_ACTIONS = {"rise", "plateau", "recover", "spike", "unspike", "silence", "resume",
+                    "detach", "attach", "low_battery", "replay", "altered"}
+
     def _control(self, action, jersey, user):
         m = self.by_jersey.get(jersey) if jersey else None
         pod = self.pods[m["device_id"]] if m else None
         t = self.t
+        if action in self._POD_ACTIONS and pod is None:
+            return {"ok": False, "error": f"{action} needs a known jersey, got {jersey!r}"}
         if action == "rise":
             pod.rise_started_at = t; pod.rise_cap_c = 3.5
         elif action == "plateau":
@@ -187,10 +193,13 @@ class Engine:
             pod.rise_started_at = None
         elif action == "spike":
             # Tour helper: the pod's next sample reads above the team limit, so the
-            # pod itself raises the absolute alert on its next broadcast.
-            pod.base_skin_c += 3.0; pod._last = None
+            # pod itself raises the absolute alert on its next broadcast. Idempotent,
+            # so a restarted or abandoned tour never stacks offsets.
+            if not pod.spiked:
+                pod.spiked = True; pod.base_skin_c += 3.0; pod._last = None
         elif action == "unspike":
-            pod.base_skin_c -= 3.0; pod._last = None
+            if pod.spiked:
+                pod.spiked = False; pod.base_skin_c -= 3.0; pod._last = None
         elif action == "silence":
             pod.silent = True
         elif action == "resume":
@@ -268,18 +277,29 @@ class Engine:
         return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(self.session_started + t))
 
 
-def build_demo(autoplay=True, seed_history=True, analyzer="deterministic", real_provider=False):
-    """Wire store + hub + accounts + engine with the fake roster."""
+def build_demo(autoplay=True, seed_history=True, analyzer="deterministic", real_provider=False,
+               session_minutes=60):
+    """Wire store + hub + accounts + engine with the fake roster.
+
+    LLM call budgets are sized for a live session of session_minutes with the
+    scaffold's own formula, not the 200 s replay scenario, so model analysis
+    does not run out a few minutes into a presentation. The real provider stays
+    capped by the scaffold's fixed LIVE_SAFETY_CEILING whatever this is."""
     from .auth import Accounts
     from .hub import DemoHub
     from .store import Store
 
     store = Store()
+    roster = demo_roster()
     from analysis_scaffold.replay import build_analyzer
-    selected = build_analyzer(analyzer, real=real_provider)
+    limits = {}
+    if analyzer.startswith("llm"):
+        from analysis_scaffold.llm_analyzer import call_budgets
+        per_wearer, session = call_budgets(session_minutes * 60, len(roster))
+        limits = dict(max_calls_per_wearer=per_wearer, max_calls_session=session)
+    selected = build_analyzer(analyzer, real=real_provider, **limits)
     hub = DemoHub(store, SESSION_ID, analyzer=selected)
     hub.analysis_enabled = analyzer != "relay"
-    roster = demo_roster()
     accounts = Accounts()
     accounts.add("k.smith", "demo", "staff", "Krista Smith (athletic trainer)")
     accounts.add("z.elkilany", "demo", "staff", "Zane El Kilany (staff)")

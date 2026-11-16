@@ -93,7 +93,9 @@ network or stop the server to see the "Connection lost" banner (AC-F9).
 - "Authentication" checks a synthetic `tag` field; the real AES-128 AEAD
   construction, byte format and key provisioning are **[OPEN]** (S1 sheet).
 - Store is plain in-memory `sqlite3`; the hub uses SQLCipher (TM-23).
-- Passwords are salted scrypt hashes; the hub uses Argon2id (6.4).
+- Passwords are salted scrypt hashes (salted PBKDF2-SHA512 on Python builds
+  without `hashlib.scrypt`, such as macOS's bundled `python3`); the hub uses
+  Argon2id (6.4).
 - No BLE: the engine calls `hub.accept()` directly. The real receiver
   (Bleak, or a XIAO forwarder — **[OPEN]**) plugs in at that call.
 - A non-consenting wearer shows "Not collecting" instead of "No signal",
@@ -136,8 +138,11 @@ Standing labels: **implementation assumptions by the coding agent**;
 **bounded-call offline-verified**; **real model untested**. Thresholds are
 **team demo settings, not validated health thresholds**. Fake outputs verify
 software wiring only, not model effectiveness, real token usage, latency or cost.
-The live app retains the scaffold's cadence, budgets, recovery windows and
-reviewed wording unchanged. Real calls are synchronous in the engine ingest
+The live app retains the scaffold's cadence, recovery windows and reviewed
+wording unchanged. Call budgets use the scaffold's formula sized for
+`--session-minutes` (default 60) instead of the 200 s replay scenario, which ran
+out about 4 minutes into a live session; real-provider attempts stay capped by
+the fixed `LIVE_SAFETY_CEILING` (300 for the server process). Real calls are synchronous in the engine ingest
 path and can delay demo ticks until the existing provider timeout; offline mode
 is the verified presentation path.
 

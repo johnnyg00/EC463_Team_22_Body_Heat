@@ -19,7 +19,8 @@ from pathlib import Path
 
 from .auth import AccessDenied
 from .engine import build_demo
-from . import views
+from . import engine, views
+from . import hub as demo_hub
 
 STATIC = Path(__file__).parent / "static"
 STATE = {}  # store, hub, accounts, roster, engine
@@ -55,11 +56,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get("Content-Length") or 0)
-        return json.loads(self.rfile.read(n) or b"{}") if n else {}
+        body = json.loads(self.rfile.read(n) or b"{}") if n else {}
+        if not isinstance(body, dict):
+            raise ValueError("JSON object expected")
+        return body
 
     def _file(self, name, ctype):
-        p = STATIC / name
-        if not p.is_file():
+        root = STATIC.resolve()
+        p = (root / name).resolve()
+        if root not in p.parents or not p.is_file():   # no "..", absolute or symlinked escapes
             return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         data = p.read_bytes()
         self.send_response(HTTPStatus.OK)
@@ -120,9 +125,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"session_id": hub.session_id, "started": eng.t_to_iso(0), "t": t,
                                    "wearers": [{**m, "consented": hub.is_consented(m["device_id"]),
                                                 "alerts_only": m["device_id"] in hub.alerts_only} for m in STATE["roster"]],
-                                   "settings": {"trend_limit_c_per_5min": 1.0, "trend_window_s": 60,
-                                                "absolute_limit_c": 38.5, "recovery_period_s": 60,
-                                                "low_battery_pct": 20, "no_signal_after_s": views.NO_SIGNAL_AFTER_S},
+                                   "settings": {"trend_limit_c_per_5min": engine.TREND_LIMIT_C_PER_5MIN,
+                                                "trend_window_s": engine.TREND_WINDOW_S,
+                                                "absolute_limit_c": engine.ABSOLUTE_LIMIT_C,
+                                                "recovery_period_s": demo_hub.RECOVERY_PERIOD_S,
+                                                "low_battery_pct": demo_hub.LOW_BATTERY_PCT,
+                                                "no_signal_after_s": views.NO_SIGNAL_AFTER_S},
                                    "events": store.events(limit=60), "denied": acc.denied_log[-20:][::-1],
                                    "demo_log": eng.log[-30:][::-1], "autoplay": eng.autoplay})
             if path == "/api/export.csv":
@@ -162,6 +170,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True}, headers=[("Set-Cookie", "bh_session=; Path=/; Max-Age=0")])
             if path == "/api/ack":
                 acc.require_staff(user, t, "POST /api/ack")
+                if not self._member(body["device_id"]):
+                    return self._json({"error": "unknown wearer"}, HTTPStatus.NOT_FOUND)
                 hub.acknowledge(body["device_id"], user["username"], t)
                 return self._json({"ok": True, "t": t, "user": user["username"]})
             if path == "/api/consent":
@@ -173,11 +183,15 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     acc.require_staff(user, t, "POST /api/consent")
                 m = self._member(dev)
+                if not m:   # check before touching hub state: unknown IDs must never become enrolled
+                    return self._json({"error": "unknown wearer"}, HTTPStatus.NOT_FOUND)
                 hub.set_consent(dev, bool(body.get("consented")), t, user["username"])
                 store.set_consent(m["participant_id"], bool(body.get("consented")), eng.t_to_iso(t))
                 return self._json({"ok": True})
             if path == "/api/alerts_only":
                 acc.require_staff(user, t, "POST /api/alerts_only")
+                if not self._member(body["device_id"]):
+                    return self._json({"error": "unknown wearer"}, HTTPStatus.NOT_FOUND)
                 hub.set_alerts_only(body["device_id"], bool(body.get("on")))
                 return self._json({"ok": True})
             if path.startswith("/api/demo/"):
@@ -242,10 +256,17 @@ def main(argv=None):
     ap.add_argument("--no-autoplay", action="store_true", help="do not run the scripted scenario; presenter triggers everything")
     ap.add_argument("--analyzer", choices=["relay", "deterministic", "llm-explain", "llm-rolling"], default="deterministic")
     ap.add_argument("--real-provider", action="store_true", help="Explicit real provider opt-in; requires OPENROUTER_API_KEY")
+    ap.add_argument("--session-minutes", type=int, default=60,
+                    help="session length the LLM call budgets are sized for (default 60); "
+                         "real-provider attempts stay capped by the fixed live safety ceiling")
     args = ap.parse_args(argv)
     if args.real_provider and not args.analyzer.startswith("llm-"):
         ap.error("--real-provider requires an llm analyzer")
-    store, hub, accounts, roster, engine = build_demo(autoplay=not args.no_autoplay, analyzer=args.analyzer, real_provider=args.real_provider)
+    if args.session_minutes <= 0:
+        ap.error("--session-minutes must be positive")
+    store, hub, accounts, roster, engine = build_demo(autoplay=not args.no_autoplay, analyzer=args.analyzer,
+                                                      real_provider=args.real_provider,
+                                                      session_minutes=args.session_minutes)
     STATE.update(store=store, hub=hub, accounts=accounts, roster=roster, engine=engine)
     engine.start()
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)

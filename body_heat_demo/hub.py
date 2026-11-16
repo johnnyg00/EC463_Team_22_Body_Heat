@@ -86,6 +86,9 @@ class DemoHub(Hub):
             if state.alert:
                 self._event(t, "alert", dev, state.alert)
                 self.recovered_at.pop(dev, None)
+                # A changed alert (e.g. trend -> absolute) is a new alert: an
+                # acknowledgement of the earlier one must not demote it (AC-F7).
+                self.acked.pop(dev, None)
             else:
                 self._event(t, "alert_clear", dev, f"pod cleared {prev_alert}")
                 self.recovered_at[dev] = t
@@ -135,17 +138,26 @@ class DemoHub(Hub):
                 self._event(t, "no_signal", dev, f"no accepted transmission for {NO_SIGNAL_AFTER_S} s")
 
     # -- staff actions (all come through authenticated routes) -----------------
+    def _require_enrolled(self, device_id):
+        """Staff actions never create hub state for a device that was not
+        enrolled; otherwise a later packet from it would pass enrollment."""
+        if device_id not in self._pods:
+            raise KeyError(f"unknown device {device_id}")
+
     def acknowledge(self, device_id, user, t):
+        self._require_enrolled(device_id)
         super().acknowledge(device_id, user, t)
         if self._pods[device_id].alert:
             self.acked[device_id] = (t, user)
         self._event(t, "ack", device_id, f"acknowledged {self._pods[device_id].alert}", user)
 
     def set_consent(self, device_id, consented, t, user=None):
+        self._require_enrolled(device_id)
         super().set_consent(device_id, consented, t)
         self._event(t, "consent", device_id, "consented" if consented else "withdrawn", user)
 
     def set_alerts_only(self, device_id, on):
+        self._require_enrolled(device_id)
         (self.alerts_only.add if on else self.alerts_only.discard)(device_id)
 
     def is_consented(self, device_id):
@@ -184,10 +196,13 @@ class DemoHub(Hub):
                     self.storage_fault = None
             except StorageFault as e:
                 self.storage_fault = f"Storage fault: {e}. Live screen continues; data since fault not saved."
+            finally:
+                self._queue.task_done()
 
     def flush(self, timeout=2.0):
-        """Tests: wait for the writer to catch up."""
+        """Wait for the writer to finish every queued write, not just to take
+        it off the queue (export and tests read the store right after)."""
         import time
         end = time.time() + timeout
-        while not self._queue.empty() and time.time() < end:
+        while self._queue.unfinished_tasks and time.time() < end:
             time.sleep(0.01)

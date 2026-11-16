@@ -2,9 +2,11 @@
 
 INPUT: device_id only (never wearer names), window_s, readings newest last with
 {t, skin_c, slope_c_per_5min, battery_pct, skin_contact}, and team_settings
-{trend_c_per_5min, absolute_c}. OUTPUT: flag (bool), kind (none|trend|
-above_limit|resume), reason (<=240 characters, C-05), evidence
-{latest_skin_c, slope_c_per_5min}. Every response is validated.
+{trend_c_per_5min, absolute_c}; numbers are rounded to MODEL_DECIMALS before
+they are sent. OUTPUT: flag (bool), kind (none|trend|above_limit|resume),
+reason (<=240 characters, C-05), evidence {latest_skin_c, slope_c_per_5min},
+which must match the newest reading within EVIDENCE_TOLERANCE. Every response
+is validated.
 Timeout, HTTP, parsing, or schema failures become analysis unavailable events,
 never normal readings. Wall-clock call latency and simulated t stay separate.
 
@@ -44,6 +46,30 @@ MAX_CALLS_SESSION = SCENARIO_WEARER_COUNT * MAX_CALLS_PER_WEARER
 LIVE_SAFETY_CEILING = 300  # independent hard ceiling; not exposed as a CLI override
 # implementation assumption by the coding agent, review and adjust before defending in the logbook
 FAIL_COOLDOWN_S = 60
+# Numbers sent to a model are rounded to this many decimals (pods report skin
+# to 0.01 C), and echoed evidence must match within half of that last digit.
+MODEL_DECIMALS = 2
+EVIDENCE_TOLERANCE = 0.5 * 10 ** -MODEL_DECIMALS + 1e-9
+
+
+def call_budgets(duration_s, wearers, score_every_s=SCORE_EVERY_S):
+    """(per-wearer, session) caps covering every cadence slot of a session of
+    duration_s seconds plus BUDGET_HEADROOM_TICKS; the scenario defaults above
+    are call_budgets(SCENARIO_DURATION_S, SCENARIO_WEARER_COUNT)."""
+    if score_every_s <= 0:
+        raise ValueError("score_every_s must be positive to size budgets")
+    per_wearer = -(-duration_s // score_every_s) + BUDGET_HEADROOM_TICKS
+    return per_wearer, wearers * per_wearer
+
+
+def model_window(window):
+    """The window as a model receives it: same fields, numbers rounded to
+    MODEL_DECIMALS so evidence can be echoed digit for digit (raw slopes are
+    long binary floats such as 4.90000000000002)."""
+    def r(v):
+        return round(v, MODEL_DECIMALS) if type(v) is float else v
+    return dict(window, readings=[{k: r(v) for k, v in reading.items()}
+                                  for reading in window["readings"]])
 
 # Constrain explanations to reviewed C-05 templates rather than exposing arbitrary
 # provider prose to staff. The model selects an explanation from window evidence.
@@ -109,6 +135,7 @@ class LLMClient:
                     "Score the supplied readings against team_settings. Use only device IDs. "
                     "Select the matching reviewed reason template in the schema. "
                     "Off-skin readings must not produce temperature flags. "
+                    "Copy evidence.latest_skin_c and evidence.slope_c_per_5min exactly from the newest reading. "
                     "Never name conditions, call a value abnormal, or direct clinical action.")},
                 {"role": "user", "content": json.dumps(window, allow_nan=False)},
             ],
@@ -136,7 +163,7 @@ class LLMClient:
         log = {"t": window["readings"][-1]["t"], "device_id": window["device_id"],
                "prompt_tokens": None, "completion_tokens": None, "status": "analysis unavailable"}
         try:
-            raw, prompt, completion = self._request(window)
+            raw, prompt, completion = self._request(model_window(window))
             log.update(prompt_tokens=prompt, completion_tokens=completion)
             result = validate_response(raw)
             log["status"] = "validated"
@@ -261,8 +288,8 @@ class LLMAnalyzer(Analyzer):
             result = validate_response(self.client.complete(window))
             latest = window["readings"][-1]
             evidence = result["evidence"]
-            if (evidence["latest_skin_c"] != latest["skin_c"] or
-                    evidence["slope_c_per_5min"] != latest["slope_c_per_5min"]):
+            if (abs(evidence["latest_skin_c"] - latest["skin_c"]) > EVIDENCE_TOLERANCE or
+                    abs(evidence["slope_c_per_5min"] - latest["slope_c_per_5min"]) > EVIDENCE_TOLERANCE):
                 raise ValueError("response evidence does not match supplied readings")
             if self.variant == "explain":
                 # Deterministic flags remain authoritative even if explanation fails.

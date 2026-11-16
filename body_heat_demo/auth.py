@@ -3,7 +3,9 @@
 Individual staff and athlete accounts so acknowledgements and exports are
 attributable. Demo note: passwords are hashed with the standard library's
 salted scrypt; the December hub uses Argon2id (6.4) which is not in the
-standard library. Role checks happen in the backend on every request."""
+standard library. Python builds linked against LibreSSL (macOS's bundled
+python3) have no hashlib.scrypt, so those fall back to salted PBKDF2-SHA512.
+Role checks happen in the backend on every request."""
 
 import hashlib
 import hmac
@@ -11,11 +13,14 @@ import os
 import secrets
 
 _SCRYPT = dict(n=2 ** 14, r=8, p=1)
+_PBKDF2_ITERATIONS = 210_000    # OWASP 2023 figure for PBKDF2-HMAC-SHA512
 
 
 def hash_password(password, salt=None):
     salt = salt or os.urandom(16)
-    return salt, hashlib.scrypt(password.encode(), salt=salt, **_SCRYPT)
+    if hasattr(hashlib, "scrypt"):
+        return salt, hashlib.scrypt(password.encode(), salt=salt, **_SCRYPT)
+    return salt, hashlib.pbkdf2_hmac("sha512", password.encode(), salt, _PBKDF2_ITERATIONS)
 
 
 class AccessDenied(Exception):

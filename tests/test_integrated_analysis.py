@@ -144,3 +144,85 @@ def test_pod_guidance_exact_wording_served(monkeypatch):
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+# -- fixes from the Nov 2026 review ------------------------------------------------
+@pytest.fixture
+def live(monkeypatch):
+    store, hub, accounts, roster, engine = build_demo(autoplay=True, seed_history=False)
+    monkeypatch.setattr(server, 'STATE', dict(store=store, hub=hub, accounts=accounts, roster=roster, engine=engine))
+    srv = ThreadingHTTPServer(('127.0.0.1', 0), server.Handler)
+    srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        yield srv.server_port, hub, accounts, engine
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def _raw_get(port, path):
+    """Send the path byte for byte (urllib would normalise '..')."""
+    import socket
+    with socket.create_connection(('127.0.0.1', port), timeout=3) as s:
+        s.sendall(f'GET {path} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n'.encode())
+        data = b''
+        while chunk := s.recv(65536):
+            data += chunk
+    return int(data.split(b' ', 2)[1])
+
+
+def test_static_files_cannot_escape_the_static_folder(live):
+    port = live[0]
+    assert _raw_get(port, '/static/app.js') == 200
+    for path in ['/static/../server.py', '/static/../../README.md', '/static/..%2fserver.py',
+                 '/static//etc/hosts', '/static/']:
+        assert _raw_get(port, path) == 404, path
+
+
+def _post(port, path, body, token):
+    req = urllib.request.Request(f'http://127.0.0.1:{port}{path}', data=json.dumps(body).encode(),
+                                 headers={'Cookie': f'bh_session={token}', 'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=3) as response:
+            return response.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+
+def test_unknown_wearer_requests_change_nothing_and_the_clock_keeps_running(live):
+    port, hub, accounts, engine = live
+    token = accounts.sign_in('k.smith', 'demo')
+    for path, body in [('/api/consent', {'device_id': 'pod-99', 'consented': True}),
+                       ('/api/ack', {'device_id': 'pod-99'}),
+                       ('/api/alerts_only', {'device_id': 'pod-99', 'on': True})]:
+        assert _post(port, path, body, token) == 404
+    assert _post(port, '/api/ack', ['not', 'an', 'object'], token) == 400
+    assert 'pod-99' not in hub._enrolled and 'pod-99' not in hub.alerts_only
+    engine.t = 154                      # scripted unknown-pod packet
+    engine.step()
+    assert hub.rejections['unknown'] == 1
+
+
+def test_session_settings_come_from_the_running_code(live):
+    port, _, accounts, _ = live
+    from body_heat_demo import engine as eng_mod, hub as hub_mod
+    token = accounts.sign_in('k.smith', 'demo')
+    req = urllib.request.Request(f'http://127.0.0.1:{port}/api/session', headers={'Cookie': f'bh_session={token}'})
+    with urllib.request.urlopen(req, timeout=3) as response:
+        settings = json.load(response)['settings']
+    assert settings == {'trend_limit_c_per_5min': eng_mod.TREND_LIMIT_C_PER_5MIN,
+                        'trend_window_s': eng_mod.TREND_WINDOW_S,
+                        'absolute_limit_c': eng_mod.ABSOLUTE_LIMIT_C,
+                        'recovery_period_s': hub_mod.RECOVERY_PERIOD_S,
+                        'low_battery_pct': hub_mod.LOW_BATTERY_PCT,
+                        'no_signal_after_s': views.NO_SIGNAL_AFTER_S}
+
+
+def test_live_llm_budgets_are_sized_for_the_session_not_the_replay():
+    from analysis_scaffold.llm_analyzer import call_budgets
+    _, hub, _, roster, engine = build_demo(seed_history=False, analyzer='llm-rolling', session_minutes=10)
+    assert (hub.analyzer.max_calls_per_wearer, hub.analyzer.max_calls_session) == call_budgets(600, len(roster))
+    for _ in range(600):                # 10 minutes: the 200 s replay budget ran out at t=241
+        engine.step()
+    assert not [n for n in hub.analysis_notices.values() if n['kind'] == 'budget_exhausted']

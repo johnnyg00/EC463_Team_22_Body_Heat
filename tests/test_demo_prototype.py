@@ -208,3 +208,57 @@ def test_pod_decides_trend_then_absolute_and_clears_off_skin():
     assert {"trend", "absolute"} <= seen
     pod.skin_contact = False
     assert pod.broadcast(200, 30.0, 55.0)["alert"] is None
+
+
+# -- fixes from the Nov 2026 review ------------------------------------------------
+def test_passwords_work_without_scrypt(monkeypatch):
+    import hashlib
+    monkeypatch.delattr(hashlib, "scrypt", raising=False)   # macOS's bundled python3 (LibreSSL)
+    acc = Accounts()
+    acc.add("k.smith", "demo", "staff", "K")
+    assert acc.sign_in("k.smith", "demo")
+    assert acc.sign_in("k.smith", "wrong") is None
+
+
+def test_escalation_needs_a_fresh_acknowledgement(hub):
+    hub.accept(packet(counter=1, mid="m1", alert="trend"), 10)
+    hub.acknowledge("pod-02", "k.smith", 12)
+    roster = [{"device_id": "pod-02", "jersey": 2, "name": "A"}]
+    assert views.build_alert_strip(hub, roster, 12)[0]["acknowledged"] is True
+    hub.accept(packet(counter=2, mid="m2", alert="absolute"), 20)
+    row = views.build_alert_strip(hub, roster, 20)[0]
+    assert row["state"] == "absolute" and row["acknowledged"] is False
+    assert "acknowledged" not in views.build_tile(hub, roster[0], 20)["badges"]
+
+
+def test_staff_actions_never_enroll_unknown_devices(hub):
+    for action in (lambda: hub.set_consent("pod-99", True, 1, "k.smith"),
+                   lambda: hub.acknowledge("pod-99", "k.smith", 1),
+                   lambda: hub.set_alerts_only("pod-99", True)):
+        with pytest.raises(KeyError):
+            action()
+    with pytest.raises(Rejected, match="unknown device"):
+        hub.accept(packet(dev="pod-99"), 2)
+    assert hub.rejections["unknown"] == 1
+
+
+def test_spike_is_idempotent_and_controls_need_a_known_jersey():
+    _, _, _, _, engine = build_demo(autoplay=False, seed_history=False)
+    pod = engine.pods["pod-12"]
+    base = pod.base_skin_c
+    engine.control("spike", 12); engine.control("spike", 12)
+    assert pod.base_skin_c == pytest.approx(base + 3.0)
+    engine.control("unspike", 12); engine.control("unspike", 12)
+    assert pod.base_skin_c == pytest.approx(base)
+    assert engine.control("rise", None)["ok"] is False
+    assert engine.control("rise", 99)["ok"] is False
+
+
+def test_flush_waits_for_the_last_write():
+    _, hub, _, _, engine = build_demo(autoplay=False, seed_history=False)
+    for _ in range(5):
+        engine.step()
+    hub.flush()
+    assert hub._queue.unfinished_tasks == 0
+    # t=0..4: one measurement set (4 signals) from each of the 29 consenting pods
+    assert hub.store.measurement_count() == 29 * 4

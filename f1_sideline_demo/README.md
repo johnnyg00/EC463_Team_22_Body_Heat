@@ -10,6 +10,7 @@ library, no internet, runs on any laptop.
 
     python -m f1_sideline_demo.demo             # fast: prints the key moments
     python -m f1_sideline_demo.demo --realtime  # 1 update per second, like live
+    python -m f1_sideline_demo.demo --athlete pod-07   # end with that athlete's own view
 
 ## Test
 

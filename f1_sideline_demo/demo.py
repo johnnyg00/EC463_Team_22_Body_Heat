@@ -8,7 +8,7 @@ Run:  python -m f1_sideline_demo.demo            (fast, prints key moments)
       python -m f1_sideline_demo.demo --athlete pod-11   (athlete view sample)
 """
 
-import sys
+import argparse
 import time
 
 from .feed import demo_pods, demo_roster
@@ -22,7 +22,7 @@ SILENCE_AT_S = 10
 ACK_AT_S = 32
 
 
-def run(realtime=False, show_every=5):
+def run(realtime=False, show_every=5, athlete=RISE_DEVICE):
     roster = demo_roster()
     pods = demo_pods()
     hub = Hub()
@@ -64,17 +64,28 @@ def run(realtime=False, show_every=5):
 
     # Athlete view sample: an athlete sees only their own tile.
     member_view = get_athlete_view(hub, roster, DEMO_SECONDS, role="athlete",
-                                   athlete_device_id=RISE_DEVICE,
-                                   requested_device_id=RISE_DEVICE)
+                                   athlete_device_id=athlete,
+                                   requested_device_id=athlete)
     print(f"Athlete view (jersey {member_view['jersey']}): {member_view['label']}, "
           f"skin {member_view['skin_c']} C")
+    teammate = SILENT_DEVICE if athlete != SILENT_DEVICE else RISE_DEVICE
     try:
         get_athlete_view(hub, roster, DEMO_SECONDS, role="athlete",
-                         athlete_device_id=RISE_DEVICE,
-                         requested_device_id=SILENT_DEVICE)
+                         athlete_device_id=athlete,
+                         requested_device_id=teammate)
     except AccessDenied as e:
         print(f"Athlete asking for a teammate's data: denied ({e})")
 
 
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="F1 sideline view demo (synthetic data)")
+    ap.add_argument("--realtime", action="store_true", help="1 update per second")
+    devices = [m["device_id"] for m in demo_roster()]
+    ap.add_argument("--athlete", default=RISE_DEVICE, choices=devices,
+                    help=f"device whose athlete view is shown at the end (default {RISE_DEVICE})")
+    args = ap.parse_args(argv)
+    run(realtime=args.realtime, athlete=args.athlete)
+
+
 if __name__ == "__main__":
-    run(realtime="--realtime" in sys.argv)
+    main()
