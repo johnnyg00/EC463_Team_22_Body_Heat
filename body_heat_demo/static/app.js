@@ -137,9 +137,13 @@
     if (t.skin_c == null) { temp.classList.add("hidden-temp"); temp.textContent = t.alerts_only ? "Alerts only" : "No reading"; }
     else { temp.textContent = `${t.skin_c.toFixed(1)}°`; temp.appendChild(el("span", "arrow", t.arrow)); }
     d.appendChild(temp);
-    if (t.hub_analysis) d.appendChild(el("b", "pod-source", "Pod-reported status"));
+    if (t.hub_analysis && big) d.appendChild(el("b", "pod-source", "Pod-reported status"));
     const lab = el("div", "label"); lab.appendChild(el("span", "ico", t.icon)); lab.appendChild(el("span", "", t.label)); d.appendChild(lab);
-    if (t.hub_analysis) {
+    if (t.hub_analysis && !big) {
+      // Live grid: one line so all 30 cards fit on one screen; the full wording is in the detail view.
+      d.appendChild(el("div", `hub-analysis hub-line${t.hub_analysis.flag ? " has-flag" : ""}`, t.hub_analysis.compact));
+    }
+    if (t.hub_analysis && big) {
       const a = t.hub_analysis, box = el("div", "hub-analysis");
       box.appendChild(el("b", "", a.label));
       if (a.flag) box.appendChild(el("div", "", `Latest flag (t=${a.flag.t}): ${a.flag.kind}: ${a.flag.message}`));
@@ -150,7 +154,8 @@
     const foot = el("div", "foot");
     const badges = el("div", "badges"); t.badge_labels.forEach(b => badges.appendChild(el("span", "badge", b))); foot.appendChild(badges);
     foot.appendChild(el("span", "age mono", t.state === "no_signal" ? `last ${ago(t.age_s)}` : ago(t.measurement_age_s ?? t.age_s))); d.appendChild(foot);
-    d.title = `${t.name}: ${t.label}. ${STATES[t.state].staff}`;
+    const hubFlag = t.hub_analysis && t.hub_analysis.flag;
+    d.title = `${t.name}: ${t.label}. ${STATES[t.state].staff}${hubFlag ? ` Hub analysis (${mmss(hubFlag.t)}): ${hubFlag.message}` : ""}`;
     if (!big) d.onclick = () => openDetail(t.device_id);
     return d;
   }

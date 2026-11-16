@@ -19,6 +19,7 @@ from .store import StorageFault
 
 RECOVERY_PERIOD_S = 60      # team setting (FR-009): how long "resume" shows after an alert clears
 LOW_BATTERY_PCT = 20        # stands in for the B+C voltage threshold (FR-010)
+_SEVERITY = {None: 0, "trend": 1, "absolute": 2}
 REQUIRED_FIELDS = ("device_id", "session_id", "counter", "measurement_id", "skin_c", "air_c",
                    "humidity_pct", "motion", "battery_pct", "alert", "skin_contact", "tag")
 
@@ -29,6 +30,7 @@ class DemoHub(Hub):
         self.analyzer = analyzer
         self.analysis_flags = {}
         self.analysis_notices = {}
+        self.analysis_seen = set()  # device_ids whose accepted readings the analyzer has processed
         self.store = store
         self.session_id = session_id
         self.rejections = {"malformed": 0, "unknown": 0, "altered": 0, "no_consent": 0, "replayed": 0}
@@ -86,9 +88,11 @@ class DemoHub(Hub):
             if state.alert:
                 self._event(t, "alert", dev, state.alert)
                 self.recovered_at.pop(dev, None)
-                # A changed alert (e.g. trend -> absolute) is a new alert: an
-                # acknowledgement of the earlier one must not demote it (AC-F7).
-                self.acked.pop(dev, None)
+                # Escalation (trend -> absolute) is a new, more serious alert: an
+                # acknowledgement of the milder one must not demote it (AC-F7).
+                # Easing back (absolute -> trend) keeps the acknowledgement.
+                if _SEVERITY[state.alert] > _SEVERITY.get(prev_alert, 0):
+                    self.acked.pop(dev, None)
             else:
                 self._event(t, "alert_clear", dev, f"pod cleared {prev_alert}")
                 self.recovered_at[dev] = t
@@ -118,6 +122,7 @@ class DemoHub(Hub):
             for flag in self.analyzer.ingest(dict(packet), t):
                 self.analysis_flags[flag.device_id] = {
                     "t": flag.t, "kind": flag.kind, "message": flag.message}
+            self.analysis_seen.add(dev)
         except Exception:
             # Never expose provider/exception text to the UI.
             self.analysis_notices[dev] = {"t": t, "kind": "analysis unavailable",

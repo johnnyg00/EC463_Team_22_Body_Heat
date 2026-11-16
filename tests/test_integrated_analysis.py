@@ -226,3 +226,19 @@ def test_live_llm_budgets_are_sized_for_the_session_not_the_replay():
     for _ in range(600):                # 10 minutes: the 200 s replay budget ran out at t=241
         engine.step()
     assert not [n for n in hub.analysis_notices.values() if n['kind'] == 'budget_exhausted']
+
+
+def test_live_grid_hub_line_and_no_flags_yet():
+    _, hub, _, roster, engine = build_demo(seed_history=False)
+    by_dev = {m['device_id']: m for m in roster}
+    a = views.build_tile(hub, by_dev['pod-02'], 0)['hub_analysis']
+    assert (a['status'], a['compact']) == ('Awaiting analysis output', 'Hub: waiting for readings')
+    engine.step()
+    a = views.build_tile(hub, by_dev['pod-02'], engine.t)['hub_analysis']
+    assert (a['status'], a['compact']) == ('No flags yet', 'Hub: no flags yet')
+    for _ in range(95):
+        engine.step()
+    a = views.build_tile(hub, by_dev['pod-11'], engine.t)['hub_analysis']
+    assert a['compact'] == 'Hub flag: above limit · 1:30'
+    assert a['flag']['message'] == MESSAGES['above_limit']      # full wording kept for the detail view
+    assert 'hub_analysis' not in views.build_tile(hub, by_dev['pod-33'], engine.t)   # no consent, no analysis

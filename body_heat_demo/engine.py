@@ -155,8 +155,10 @@ class Engine:
             (170, "plateau", 11),
         ]
 
-    def seed_history(self, minutes=40):
-        """Fake back-history so the detail charts look like a real session."""
+    def seed_history(self, minutes=5):
+        """Fake back-history so the detail charts look like a real session.
+        Kept short so the live part of a demo (alerts, markers) fills most of
+        each chart instead of a thin strip at the right edge."""
         rng = random.Random(7)
         start = -minutes * 60
         for m in self.roster:
@@ -199,7 +201,10 @@ class Engine:
                 pod.spiked = True; pod.base_skin_c += 3.0; pod._last = None
         elif action == "unspike":
             if pod.spiked:
-                pod.spiked = False; pod.base_skin_c -= 3.0; pod._last = None
+                # Also drop the trend window: the artificial 3 C step up would
+                # otherwise make the pod report "rising" for up to a minute
+                # while the reading is falling back to normal.
+                pod.spiked = False; pod.base_skin_c -= 3.0; pod._last = None; pod._samples.clear()
         elif action == "silence":
             pod.silent = True
         elif action == "resume":

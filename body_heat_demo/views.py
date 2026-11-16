@@ -100,10 +100,44 @@ STATE_MEANING = {
 }
 
 
+# Hub-analysis wording on staff screens. The live grid shows one compact line
+# per card; the person's detail view keeps the analyzer's full reviewed C-05
+# message. Readings versus team settings only.
+ANALYSIS_STATUS = {
+    "flag": "Latest analysis flag",
+    "unavailable": "Analysis unavailable",
+    "no_flags": "No flags yet",                  # the analyzer has readings for this wearer, no flag raised
+    "waiting": "Awaiting analysis output",       # no accepted reading has reached the analyzer yet
+}
+ANALYSIS_SHORT = {"trend": "rising", "above_limit": "above limit", "resume": "back below"}
+NOTICE_SHORT = {"analysis unavailable": "analysis unavailable", "budget_exhausted": "call budget used up",
+                "model_deferred": "explanation deferred"}
+COMPACT_TEMPLATES = {"flag": "Hub flag: {what} · {at}", "notice": "Hub: {what} · {at}",
+                     "no_flags": "Hub: no flags yet", "waiting": "Hub: waiting for readings"}
+
+
 def all_user_facing_strings():
     """Everything a person can read on screen, for the AC-F4 audit."""
     return (list(STATE_LABELS.values()) + list(BADGE_LABELS.values()) + list(UI_STRINGS.values())
-            + list(STAFF_GUIDANCE.values()) + list(WEARER_GUIDANCE.values()) + list(STATE_MEANING.values()))
+            + list(STAFF_GUIDANCE.values()) + list(WEARER_GUIDANCE.values()) + list(STATE_MEANING.values())
+            + list(ANALYSIS_STATUS.values()) + list(ANALYSIS_SHORT.values()) + list(NOTICE_SHORT.values())
+            + list(COMPACT_TEMPLATES.values()))
+
+
+def _mmss(t):
+    t = max(0, int(t))
+    return f"{t // 60}:{t % 60:02d}"
+
+
+def analysis_compact(flag, notice, status_key):
+    """One line for a live-grid card: the latest flag if there is one, else the
+    latest coverage notice, else whether readings have reached the analyzer."""
+    if flag:
+        return COMPACT_TEMPLATES["flag"].format(what=ANALYSIS_SHORT.get(flag["kind"], flag["kind"]), at=_mmss(flag["t"]))
+    if notice:
+        return COMPACT_TEMPLATES["notice"].format(what=NOTICE_SHORT.get(notice["kind"], notice["kind"]),
+                                                  at=_mmss(notice["t"]))
+    return COMPACT_TEMPLATES[status_key]
 
 
 def primary_state(hub, device_id, t):
@@ -175,13 +209,15 @@ def build_tile(hub, member, t, *, staff=True):
     }
 
     if staff and getattr(hub, "analysis_enabled", hub.analyzer is not None) and hub.is_consented(dev):
+        flag, notice = hub.analysis_flags.get(dev), hub.analysis_notices.get(dev)
+        key = ("flag" if flag else "unavailable" if notice else
+               "no_flags" if dev in getattr(hub, "analysis_seen", ()) else "waiting")
         tile["hub_analysis"] = {
             "label": "Hub analysis",
-            "flag": hub.analysis_flags.get(dev),
-            "notice": hub.analysis_notices.get(dev),
-            "status": ("Latest analysis flag" if dev in hub.analysis_flags else
-                       "Analysis unavailable" if dev in hub.analysis_notices else
-                       "Awaiting analysis output"),
+            "flag": flag,
+            "notice": notice,
+            "status": ANALYSIS_STATUS[key],
+            "compact": analysis_compact(flag, notice, key),
         }
     return tile
 

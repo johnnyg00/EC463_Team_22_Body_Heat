@@ -123,11 +123,16 @@ offline by default, even if a key is present. Real calls require the explicit
 `--real-provider` flag with an LLM choice and `OPENROUTER_API_KEY` in the environment;
 this reuses the scaffold's existing bounded provider path.
 
-Staff roster cards and staff detail cards show a separate dashed **Hub analysis**
-section beside the existing pod status. It shows the latest flag kind and the
+Staff roster cards show **one dashed Hub line** under the pod status, so the
+fixed 6 × 5 grid keeps all 30 people on one screen: `Hub flag: above limit · 1:30`
+(latest flag and session time), else the latest coverage notice, else
+`Hub: no flags yet` once the analyzer has processed readings for that wearer
+(`Hub: waiting for readings` before that). Staff detail cards show the full
+**Hub analysis** section beside the pod status: the latest flag kind and the
 analyzer's exact reviewed C-05 wording, including `resume`. This is a latest-event
 display, not a new OK decision or a replacement for pod alerts. Before a flag it
-says “Awaiting analysis output”. Analysis notices include their event time and
+says “No flags yet” (or “Awaiting analysis output” before any reading reached the
+analyzer). Analysis notices include their event time and
 remain visible as the latest coverage notice: `analysis unavailable`,
 `budget_exhausted`, or `model_deferred`. Session-wide budget exhaustion is shown
 for every consenting wearer. A notice never becomes an OK result. No analysis

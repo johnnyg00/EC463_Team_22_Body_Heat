@@ -149,6 +149,21 @@ h3 .tiny { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .tile .label .ico { font-size: 19px; }
 .tile .foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; gap: 6px; }
 .tile .badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.tile .foot .age { white-space: nowrap; }   /* "6 s ago" never splits beside a long badge */
+/* Live-grid card text scales with the card's own height (cqh), so the fixed
+   6 x 5 grid never clips a card: from a 1366 x 768 laptop with the alert panel
+   open (cards ~84 px) up to 1080p, where the caps keep the full-size look. */
+.grid .tile { container-type: size; }
+.grid .tile .jersey { font-size: clamp(10px, 13cqh, 17px); }
+.grid .tile .name { font-size: clamp(10px, 13cqh, 18px); }
+.grid .tile .temp { font-size: clamp(13px, 20cqh, 28px); }
+.grid .tile .temp .arrow { font-size: clamp(10px, 14cqh, 20px); }
+.grid .tile .temp.hidden-temp { font-size: clamp(10px, 12cqh, 16px); }
+.grid .tile .label { font-size: clamp(10px, 12cqh, 16px); }
+.grid .tile .label .ico { font-size: clamp(11px, 14cqh, 19px); }
+.grid .tile .foot { font-size: clamp(9px, 10cqh, 13px); }
+.grid .tile .hub-line { font-size: clamp(9px, 10cqh, 12px); flex-shrink: 0; }
+@media (max-height: 860px) { .grid .tile { padding-top: 4px; padding-bottom: 4px; } }
 .badge { font-size: 12px; font-weight: 600; border: 1px solid var(--line-strong); border-radius: 6px; padding: 0 5px; color: var(--muted); white-space: nowrap; }
 .tile.greyed .temp, .tile.greyed .name { opacity: .5; }
 /* state styling: colour + left bar + pattern, so each reads without colour */
@@ -281,8 +296,8 @@ table.list td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical
 
 .hub-analysis { border-top: 2px dashed #667; margin-top: .5rem; padding-top: .5rem; font-size: .8rem; }
 .analysis-notice { font-weight: bold; border: 2px solid currentColor; padding: .25rem; }
-/* Analysis copy must remain readable rather than clipping inside fixed tour-era tiles. */
-.screen:has(.grid .hub-analysis) { overflow: auto; }
-.grid:has(.hub-analysis) { height: auto; flex: none; grid-template-rows: none; grid-auto-rows: minmax(260px, auto); }
-.tile:has(.hub-analysis) { min-height: min-content; justify-content: flex-start; gap: 5px; }
-.tile:has(.hub-analysis) .foot { margin-top: auto; }
+/* Live grid: hub analysis is one line per card so the fixed 6 x 5 grid keeps all
+   30 people on one screen; the full reviewed wording is in the detail view. */
+.tile .hub-line { border-top: 1px dashed var(--line-strong); margin-top: 2px; padding-top: 2px; font-size: 12px;
+  line-height: 1.3; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .hub-line.has-flag { color: var(--fg); font-weight: 700; }

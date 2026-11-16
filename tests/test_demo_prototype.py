@@ -229,6 +229,11 @@ def test_escalation_needs_a_fresh_acknowledgement(hub):
     row = views.build_alert_strip(hub, roster, 20)[0]
     assert row["state"] == "absolute" and row["acknowledged"] is False
     assert "acknowledged" not in views.build_tile(hub, roster[0], 20)["badges"]
+    # Easing back from absolute to trend keeps the acknowledgement of the absolute alert.
+    hub.acknowledge("pod-02", "k.smith", 22)
+    hub.accept(packet(counter=3, mid="m3", alert="trend"), 30)
+    row = views.build_alert_strip(hub, roster, 30)[0]
+    assert row["state"] == "trend" and row["acknowledged"] is True and row["ack_t"] == 22
 
 
 def test_staff_actions_never_enroll_unknown_devices(hub):
@@ -250,6 +255,19 @@ def test_spike_is_idempotent_and_controls_need_a_known_jersey():
     assert pod.base_skin_c == pytest.approx(base + 3.0)
     engine.control("unspike", 12); engine.control("unspike", 12)
     assert pod.base_skin_c == pytest.approx(base)
+    # The tour's spike/unspike never leaves a "rising" alert behind as the reading falls.
+    for _ in range(40):
+        engine.step()
+    engine.control("spike", 12)
+    for _ in range(30):
+        engine.step()
+    assert engine.hub.state("pod-12").alert == "absolute"
+    engine.control("unspike", 12)
+    alerts = set()
+    for _ in range(70):
+        engine.step()
+        alerts.add(engine.hub.state("pod-12").alert)
+    assert alerts == {None}
     assert engine.control("rise", None)["ok"] is False
     assert engine.control("rise", 99)["ok"] is False
 
