@@ -1,0 +1,2 @@
+# Python 3.10+; macOS 10.15+, Windows 11 build 22000+, or Linux BlueZ 5.55+.
+bleak==3.1.0
