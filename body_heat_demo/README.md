@@ -96,11 +96,72 @@ network or stop the server to see the "Connection lost" banner (AC-F9).
 - Passwords are salted scrypt hashes (salted PBKDF2-SHA512 on Python builds
   without `hashlib.scrypt`, such as macOS's bundled `python3`); the hub uses
   Argon2id (6.4).
-- No BLE: the engine calls `hub.accept()` directly. The real receiver
-  (Bleak, or a XIAO forwarder — **[OPEN]**) plugs in at that call.
+- Synthetic pods call `hub.accept()` directly. One slot can instead be fed by
+  the real TempMonitor pod over BLE (`--ble-pod`, below), through the same call.
 - A non-consenting wearer shows "Not collecting" instead of "No signal",
   even though Table F2 ranks no-signal higher. Nothing is collected from
   them, so no-signal would be misleading. Confirm with Krista (F owner).
+
+## Real pod over Bluetooth (TempMonitor)
+
+Mathis's firmware package `TempMonitor_v1.1.0_USB_Power_Fix/` (component-testing
+branch: XIAO ESP32S3 + TMP117 + SHT45, on-pod alert rules, BLE) can feed one
+roster slot. The other 29 wearers stay synthetic.
+
+```sh
+python3.12 -m pip install -r TempMonitor_v1.1.0_USB_Power_Fix/requirements.txt   # bleak, Python 3.10+
+python3.12 TempMonitor_v1.1.0_USB_Power_Fix/receiver.py --list                    # optional: board IDs
+python3.12 -m body_heat_demo.server --ble-pod 2 [--ble-device ID]
+```
+
+Close the standalone `receiver.py` first: the board takes one central at a
+time. On macOS, start it from a terminal app that has Bluetooth permission
+(System Settings → Privacy & Security → Bluetooth). macOS kills a process that
+uses Bluetooth without permission, so the server probes in a child process
+first and stops with an explanation instead of crashing. Use a jersey with no scripted or tour events (2 is free; avoid 3, 7, 11,
+12, 18, 24). The card shows a **BLE** tag, and Presenter tools → Hub counters
+shows the link, reading and decision status, and the pod's own threshold.
+
+`body_heat_demo/pod_bridge.py` imports the package's `receiver.py` unchanged
+(decoders, freshness watches, board selection). It maps each 1 s sensor
+notification onto the existing hub packet, carrying the latest 10 s alert
+decision, and calls `Engine.ingest_external` → `DemoHub.accept`. Consent,
+counter, live state, analysis and storage are therefore the same path.
+
+What differs from the synthetic pods (see the module docstring for detail):
+
+- **Not authenticated.** The bench firmware has no pairing or encryption. The
+  bridge stamps the hub's synthetic session/tag as the local collector.
+- **Pod decision unavailable** (new state, not in Table F2 yet; needs F-owner
+  sign-off). It shows when the pod has no current decision: startup, sensor
+  fault, no alert event for 15 s, a dropped link, or sensor-only firmware. It
+  is never OK. An active alert is held with this badge and is cleared only by
+  a valid pod decision, so a fault never produces "Back below team setting".
+- **Rising check not ready yet** (badge on OK). The pod's trend window takes 5
+  min (31 samples) to fill after every boot or history restart. Until then, OK
+  covers the temperature limit only. Warm-up is not a "not rising" result.
+- **No battery gauge, IMU or contact sensor** on this board. Battery and
+  movement are unknown (not stored, never zero). "Pod not on skin" cannot show.
+- **TMP117 WAIT/error** shows "No reading", stores nothing for skin, and skips
+  hub analysis for that packet (a sensor gap, not an analysis failure).
+- **Thresholds differ.** The pod alerts above 29.0 °C (Mathis's bench demo
+  setting) and at 0.06 °C/min over 5 min. The hub analyzer and Setup page use
+  the team settings (38.5 °C, 1.0 °C per 5 min).
+- **Freshness.** A new pod decision reaches the hub as soon as it arrives, even
+  if readings are late. It rides on the last reading under the same measurement
+  ID, so nothing new is stored and the reading's age keeps growing. If the
+  decision is more than 15 s old, the hub marks it unavailable within about a
+  second, even while the link stays up. If no
+  reading arrives for 15 s, the bridge reconnects to the same board. On
+  connect, the stored alert value is read before subscribing. It only names a
+  fault the firmware will not resend; it is never shown as a current decision.
+- **LLM analyzers and cost.** This pod sends a new reading every second, not
+  every 10 s, so its 5-min analysis window holds about 300 readings instead of
+  30. With `--real-provider`, expect about 10× the prompt tokens for this
+  wearer. The offline fake client is unaffected.
+
+Offline tests use the protocol's golden packets and a fake radio
+(`tests/test_pod_bridge.py`). They do not replace a live run with the board.
 
 ## Integrated live hub analysis
 

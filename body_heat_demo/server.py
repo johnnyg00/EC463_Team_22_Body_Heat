@@ -228,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
                             tile["skin_c"] = (hub.state(tile["device_id"]).reading or {}).get("skin_c")
                     strip = views.build_alert_strip(hub, own, t) if user["role"] == "staff" else []
                     notices = views.build_notices(hub, own, t) if user["role"] == "staff" else []
-                    status = views.build_status(hub, t, store)
+                    status = views.build_status(hub, t, store, staff=user["role"] == "staff")
                     msg = {"t": t}
                     if last_tiles is None:
                         msg["tiles"] = tiles
@@ -259,24 +259,61 @@ def main(argv=None):
     ap.add_argument("--session-minutes", type=int, default=60,
                     help="session length the LLM call budgets are sized for (default 60); "
                          "real-provider attempts stay capped by the fixed live safety ceiling")
+    ap.add_argument("--ble-pod", type=int, metavar="JERSEY",
+                    help="feed this roster slot from the real TempMonitor pod over Bluetooth "
+                         "(needs Python 3.10+ and bleak; see body_heat_demo/README.md)")
+    ap.add_argument("--ble-device", metavar="ID",
+                    help="exact board ID from TempMonitor's receiver.py --list (required if several boards advertise)")
+    ap.add_argument("--ble-scan-seconds", type=float, default=8.0)
     args = ap.parse_args(argv)
     if args.real_provider and not args.analyzer.startswith("llm-"):
         ap.error("--real-provider requires an llm analyzer")
     if args.session_minutes <= 0:
         ap.error("--session-minutes must be positive")
-    store, hub, accounts, roster, engine = build_demo(autoplay=not args.no_autoplay, analyzer=args.analyzer,
-                                                      real_provider=args.real_provider,
-                                                      session_minutes=args.session_minutes)
-    STATE.update(store=store, hub=hub, accounts=accounts, roster=roster, engine=engine)
-    engine.start()
+    ble_dev = None
+    if args.ble_pod is not None:
+        ble_dev = next((m["device_id"] for m in engine.demo_roster() if m["jersey"] == args.ble_pod), None)
+        if ble_dev is None:
+            ap.error(f"--ble-pod {args.ble_pod} is not a roster jersey ({', '.join(map(str, engine.JERSEYS))})")
+        if not 1 <= args.ble_scan_seconds <= 60:
+            ap.error("--ble-scan-seconds must be between 1 and 60")
+        if sys.version_info < (3, 10):
+            ap.error("--ble-pod needs Python 3.10+ (bleak); run with python3.12")
+        try:
+            import bleak  # noqa: F401
+            from .pod_bridge import bluetooth_preflight, load_protocol
+            protocol = load_protocol()
+        except (ImportError, FileNotFoundError) as e:
+            ap.error(f"--ble-pod setup: {e}. Install with: python3.12 -m pip install -r "
+                     "TempMonitor_v1.1.0_USB_Power_Fix/requirements.txt")
+        problem = bluetooth_preflight()
+        if problem:
+            ap.error(f"--ble-pod: {problem}")
+    elif args.ble_device:
+        ap.error("--ble-device needs --ble-pod")
+    store, hub, accounts, roster, engine_ = build_demo(autoplay=not args.no_autoplay, analyzer=args.analyzer,
+                                                       real_provider=args.real_provider,
+                                                       session_minutes=args.session_minutes,
+                                                       external_devices=[ble_dev] if ble_dev else [])
+    STATE.update(store=store, hub=hub, accounts=accounts, roster=roster, engine=engine_)
+    engine_.start()
+    if ble_dev:
+        from .pod_bridge import attach
+        attach(engine_, hub, ble_dev, ble_device=args.ble_device, scan_seconds=args.ble_scan_seconds,
+               protocol=protocol)
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     srv.daemon_threads = True
     print(f"Body Heat demo hub: http://localhost:{args.port}  (Ctrl-C to stop)")
-    print("Sign in as k.smith / demo (staff) or athlete11 / demo (athlete). All data is synthetic.")
+    print("Sign in as k.smith / demo (staff) or athlete11 / demo (athlete).")
+    if ble_dev:
+        print(f"#{args.ble_pod} ({ble_dev}) is fed by the real TempMonitor pod over Bluetooth; "
+              "every other wearer is synthetic. BLE readings are not authenticated.")
+    else:
+        print("All data is synthetic.")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        engine.stop()
+        engine_.stop()
 
 
 if __name__ == "__main__":

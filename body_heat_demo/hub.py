@@ -41,6 +41,9 @@ class DemoHub(Hub):
         self.measurement_at = {}    # device_id -> t of the last NEW measurement
         self.low_battery = {}       # device_id -> bool
         self.no_signal_flagged = set()
+        self.decision_unavailable = {}  # device_id -> why the pod has no current alert decision
+        self.trend_warmup = set()   # device_ids whose pod reports its trend window is still filling
+        self.collectors = []        # live radio bridges (pod_bridge.PodBridge) shown to staff
         self.storage_fault = None   # visible fault text, or None
         self._queue = queue.Queue(maxsize=5000)
         self._writer = threading.Thread(target=self._drain, daemon=True)
@@ -74,6 +77,17 @@ class DemoHub(Hub):
         # 6. live state first
         prev_alert, prev_contact = state.alert, state.skin_contact
         new_measurement = packet["measurement_id"] != state.last_measurement_id
+        if packet.get("alert_valid", True) is False:
+            # The pod has no current decision (starting up, sensor fault, stale
+            # or lost link). That is neither OK nor the pod clearing its alert:
+            # hold the last decided alert so only a valid pod decision changes it.
+            packet = dict(packet, alert=prev_alert)
+            self._set_decision_unavailable(dev, t, packet.get("alert_status") or "unavailable")
+        elif self.decision_unavailable.pop(dev, None) is not None:
+            self._event(t, "decision", dev, "pod decision available")
+        if packet.get("alert_valid", True) is not False:
+            # Only pods that report trend readiness (the real TempMonitor) send this.
+            (self.trend_warmup.add if packet.get("trend_ready") is False else self.trend_warmup.discard)(dev)
         super().accept(packet, t)
         self.accepted += 1
         state.slope = packet.get("slope_c_per_5min")
@@ -99,21 +113,40 @@ class DemoHub(Hub):
                 self.acked.pop(dev, None)   # a new alert will need a new acknowledgement
         if state.skin_contact != prev_contact:
             self._event(t, "contact", dev, "on skin" if state.skin_contact else "not on skin")
-        low = packet["battery_pct"] <= LOW_BATTERY_PCT
+        # None = the pod has no battery gauge (the bench TempMonitor); unknown is not low.
+        low = packet["battery_pct"] is not None and packet["battery_pct"] <= LOW_BATTERY_PCT
         if low != self.low_battery.get(dev, False):
             self.low_battery[dev] = low
             self._event(t, "battery", dev, "low" if low else "ok")
 
         self._analyze(packet, t)
 
-        # storage second: never blocks alert forwarding
+        # storage second: never blocks alert forwarding. A missing value (sensor
+        # not reading, or a signal the pod does not have) is not stored at all,
+        # so it can never be read back as zero or as a measurement.
         if new_measurement:
-            self._enqueue(("measurement", packet["measurement_id"], dev, dict(state.reading), t))
+            reading = {k: v for k, v in state.reading.items() if v is not None}
+            self._enqueue(("measurement", packet["measurement_id"], dev, reading, t))
         return True
+
+    def _set_decision_unavailable(self, dev, t, why):
+        if self.decision_unavailable.get(dev) != why:
+            self.decision_unavailable[dev] = why
+            self._event(t, "decision", dev, f"pod decision unavailable ({why})")
+
+    def mark_decision_unavailable(self, device_id, t, why):
+        """The collector lost the radio link. Not a packet: it does not refresh
+        the device's last-accepted time, so the 60 s no-signal rule still runs."""
+        self._require_enrolled(device_id)
+        self._set_decision_unavailable(device_id, t, why)
 
     def _analyze(self, packet, t):
         """Only reached after hub acceptance; failures never stop reception/storage."""
         if self.analyzer is None:
+            return
+        if packet.get("skin_c") is None:
+            # Skin sensor not reading (e.g. TMP117 WAIT/error): nothing to analyze.
+            # A sensor gap is not an analysis failure, so it raises no notice.
             return
         dev = packet["device_id"]
         events = getattr(self.analyzer, "events", [])

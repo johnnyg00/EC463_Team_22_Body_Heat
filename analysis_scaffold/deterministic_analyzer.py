@@ -54,7 +54,9 @@ class ReadingWindows:
             self.ids.pop(dev, None)
             self.last[dev] = t
             return None
-        if not finite_number(pkt.get("skin_c")) or not finite_number(pkt.get("battery_pct")):
+        # battery_pct None = pod has no battery gauge (bench TempMonitor); unknown, not zero.
+        battery = pkt.get("battery_pct")
+        if not finite_number(pkt.get("skin_c")) or not (battery is None or finite_number(battery)):
             raise ValueError("non-finite reading")
         if previous is not None and t - previous > MAX_GAP_S:
             self.samples.pop(dev, None)

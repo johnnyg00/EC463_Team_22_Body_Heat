@@ -63,3 +63,7 @@ Target materials budget is about $1,000.
 Run `python3 -m body_heat_demo.server` for the local web app with deterministic
 hub analysis enabled by default. See [demo instructions](body_heat_demo/README.md#integrated-live-hub-analysis)
 for analyzer choices, staff-only output, offline checks and standing labels.
+
+Add `--ble-pod 2` (Python 3.10+, `bleak`) to feed one roster slot from the real
+TempMonitor pod in `TempMonitor_v1.1.0_USB_Power_Fix/` over Bluetooth. See
+[Real pod over Bluetooth](body_heat_demo/README.md#real-pod-over-bluetooth-tempmonitor).

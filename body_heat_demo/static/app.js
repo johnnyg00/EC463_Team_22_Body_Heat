@@ -118,11 +118,11 @@
     const counts = {};
     tiles.forEach(t => counts[t.state] = (counts[t.state] || 0) + 1);
     const need = (counts.absolute || 0) + (counts.trend || 0);
-    const check = (counts.no_signal || 0) + (counts.detached || 0) + (counts.low_battery || 0);
+    const check = (counts.no_signal || 0) + (counts.no_decision || 0) + (counts.detached || 0) + (counts.low_battery || 0);
     const sum = $("#summary"); sum.innerHTML = "";
     const head = el("span", need ? "need" : "allok", need ? `${need} ${need === 1 ? S.needs_attention : S.need_attention}` : check ? `No alerts · ${check} pod${check > 1 ? "s" : ""} to check` : `✓ ${S.all_ok}`);
     sum.appendChild(head);
-    ["absolute", "trend", "no_signal", "detached", "low_battery", "ok", "not_collecting"].forEach(k => {
+    ["absolute", "trend", "no_signal", "no_decision", "detached", "low_battery", "ok", "not_collecting"].forEach(k => {
       if (!counts[k]) return;
       const p = el("span", `pill ${k}`); p.appendChild(el("span", "", STATES[k].icon)); p.appendChild(el("span", "", `${counts[k]} ${k === "ok" ? "OK" : STATES[k].label}`)); sum.appendChild(p);
     });
@@ -132,7 +132,9 @@
   function tileNode(t, big) {
     const d = el(big ? "div" : "button", `tile ${t.state}${t.greyed ? " greyed" : ""}${big ? " big" : ""}`);
     d.dataset.dev = t.device_id; d.setAttribute("role", "listitem");
-    const top = el("div", "top"); top.appendChild(el("span", "jersey", `#${t.jersey}`)); top.appendChild(el("span", "name", t.name)); d.appendChild(top);
+    const top = el("div", "top"); top.appendChild(el("span", "jersey", `#${t.jersey}`)); top.appendChild(el("span", "name", t.name));
+    if (t.live_pod) { const tag = el("span", "live-tag", "BLE"); tag.title = "Real TempMonitor pod over Bluetooth"; top.appendChild(tag); }
+    d.appendChild(top);
     const temp = el("div", "temp");
     if (t.skin_c == null) { temp.classList.add("hidden-temp"); temp.textContent = t.alerts_only ? "Alerts only" : "No reading"; }
     else { temp.textContent = `${t.skin_c.toFixed(1)}°`; temp.appendChild(el("span", "arrow", t.arrow)); }
@@ -171,7 +173,7 @@
       const d = el("div", `alert-row ${r.state}${r.acknowledged ? " acked" : ""}`);
       d.appendChild(el("span", "ico", r.icon));
       const ww = el("div", "who-what");
-      ww.appendChild(el("span", "what", `#${r.jersey} ${r.name} — ${r.label}`));
+      ww.appendChild(el("span", "what", `#${r.jersey} ${r.name} — ${r.label}${r.decision_unavailable ? ` (last pod decision; ${STATES.no_decision.label.toLowerCase()})` : ""}`));
       ww.appendChild(el("span", "todo", r.acknowledged ? `Noted by ${r.ack_by} at ${mmss(r.ack_t)}. Stays until the pod clears it.` : STATES[r.state].staff));
       d.appendChild(ww);
       d.appendChild(el("span", "since", `for ${mmss(r.since_s)}`));
@@ -243,6 +245,10 @@
     panels.forEach(p => {
       const ph = (H - 40) * p.h, bottom = top + ph - 18;
       const vals = p.series.flatMap(([, pts]) => pts.map(q => q[1])).concat(p.limit ? [p.limit] : []);
+      if (!vals.length) {   // e.g. the real TempMonitor has no movement sensor: say so, no NaN axis
+        const t = mk("text", { x: L + 4, y: top + 10 }); t.textContent = `${p.title}: not measured by this pod`; svg.appendChild(t);
+        top += ph; return;
+      }
       let lo = Math.min(...vals), hi = Math.max(...vals); if (hi - lo < 0.5) { hi += 0.25; lo -= 0.25; } const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
       const Y = (v) => bottom - (v - lo) / (hi - lo) * (bottom - top - 14);
       svg.appendChild(mk("line", { x1: L, x2: W - R, y1: bottom, y2: bottom, class: "axis" }));
@@ -303,6 +309,14 @@
   function renderCounters(s) {
     const rej = Object.entries(s.rejections).map(([k, v]) => `<tr><td>Rejected: ${k.replace("_", " ")}</td><td class="mono">${v}</td></tr>`).join("");
     $("#counters").innerHTML = `<tr><td>Accepted packets</td><td class="mono">${s.accepted}</td></tr>${rej}<tr><td>Stored measurements</td><td class="mono">${s.stored_measurements}</td></tr><tr><td>Repeated IDs ignored</td><td class="mono">${s.ignored_duplicates}</td></tr><tr><td>Storage</td><td>${s.storage_fault ? s.storage_fault : "OK"}</td></tr>`;
+    (s.collectors || []).forEach(c => {
+      const row = (k, v) => { const tr = el("tr"); tr.appendChild(el("td", "", k)); tr.appendChild(el("td", "mono", String(v))); $("#counters").appendChild(tr); };
+      row(`Bluetooth pod ${c.device_id}`, c.link + (c.detail ? ` (${c.detail})` : ""));
+      row("Pod readings", c.sensor);
+      row("Pod decision", c.decision.replace("_", " "));
+      row("Pod threshold (from pod)", c.pod_threshold_c == null ? "not yet received" : `${c.pod_threshold_c.toFixed(2)} °C`);
+      row("Forwarded / hub rejected / bad frames", `${c.forwarded} / ${c.hub_rejected} / ${c.bad_frames}`);
+    });
   }
 
   // ---------- athlete / wearer view ----------
@@ -319,6 +333,7 @@
     c.appendChild(el("div", "ico", t.icon));
     c.appendChild(el("div", "headline", t.label));
     c.appendChild(el("div", "detail", STATES[t.state].wearer));
+    if (t.badges.includes("no_decision")) c.appendChild(el("div", "detail note", `${STATES.no_decision.label}: ${STATES.no_decision.wearer}`));
     c.appendChild(el("div", "temp", t.skin_c == null ? "" : `Skin ${t.skin_c.toFixed(1)} °C ${t.arrow} · ${ago(t.measurement_age_s ?? t.age_s)}`));
   }
   async function renderAthleteChart() {

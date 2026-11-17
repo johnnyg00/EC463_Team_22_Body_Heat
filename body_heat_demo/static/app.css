@@ -107,6 +107,7 @@ h3 .tiny { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .summary .pill.absolute { color: var(--abs); background: var(--abs-bg); border-color: var(--abs); }
 .summary .pill.trend { color: var(--trend); background: var(--trend-bg); border-color: var(--trend); }
 .summary .pill.no_signal { color: var(--nosig); background: var(--nosig-bg); border-color: var(--nosig); }
+.summary .pill.no_decision { color: var(--nosig); background: var(--panel); border-color: var(--nosig); border-style: dashed; }
 .summary .pill.detached { color: var(--det); background: var(--det-bg); border-color: var(--det); }
 .summary .pill.low_battery { color: var(--bat); background: var(--bat-bg); border-color: var(--bat); }
 .summary .pill.not_collecting { color: var(--nc); background: var(--nc-bg); border-color: var(--nc); }
@@ -175,6 +176,9 @@ h3 .tiny { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .tile.trend::before { background: var(--trend); } .tile.trend .label { color: var(--trend); }
 .tile.no_signal { border-style: dashed; border-color: var(--line-strong); background: var(--nosig-bg); }
 .tile.no_signal::before { background: repeating-linear-gradient(0deg, var(--nosig) 0 6px, transparent 6px 12px); } .tile.no_signal .label { color: var(--nosig); }
+.tile.no_decision { border-style: dashed; border-color: var(--nosig); }
+.tile.no_decision::before { background: repeating-linear-gradient(0deg, var(--nosig) 0 2px, transparent 2px 6px); } .tile.no_decision .label { color: var(--nosig); }
+.live-tag { margin-left: auto; font-size: 11px; font-weight: 800; letter-spacing: .04em; color: var(--accent); border: 1px solid var(--accent); border-radius: 5px; padding: 0 4px; }
 .tile.detached { border-style: dotted; border-color: var(--det); }
 .tile.detached::before { background: var(--det); } .tile.detached .label { color: var(--det); }
 .tile.low_battery { border-color: var(--bat); }
@@ -194,10 +198,12 @@ h3 .tiny { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .status-card .headline { font-size: 26px; font-weight: 800; }
 .status-card .detail { font-size: 18px; color: var(--muted); }
 .status-card .temp { font-size: 17px; color: var(--muted); grid-column: 2; }
+.status-card .detail.note { grid-column: 2; font-weight: 700; }
 .status-card.ok { border-color: var(--ok); background: var(--ok-bg); } .status-card.ok .ico, .status-card.ok .headline { color: var(--ok); }
 .status-card.absolute { border-color: var(--abs); background: var(--abs-bg); } .status-card.absolute .ico, .status-card.absolute .headline { color: var(--abs); }
 .status-card.trend { border-color: var(--trend); background: var(--trend-bg); } .status-card.trend .ico, .status-card.trend .headline { color: var(--trend); }
 .status-card.no_signal { border-color: var(--nosig); background: var(--nosig-bg); } .status-card.no_signal .ico, .status-card.no_signal .headline { color: var(--nosig); }
+.status-card.no_decision { border-color: var(--nosig); border-style: dashed; } .status-card.no_decision .ico, .status-card.no_decision .headline { color: var(--nosig); }
 .status-card.detached { border-color: var(--det); background: var(--det-bg); } .status-card.detached .ico, .status-card.detached .headline { color: var(--det); }
 .status-card.low_battery { border-color: var(--bat); background: var(--bat-bg); } .status-card.low_battery .ico, .status-card.low_battery .headline { color: var(--bat); }
 .status-card.not_collecting { border-color: var(--nc); background: var(--nc-bg); }
@@ -229,6 +235,7 @@ table.list td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical
 .guide-table tr.absolute .ico, .guide-table tr.absolute .lab { color: var(--abs); }
 .guide-table tr.trend .ico, .guide-table tr.trend .lab { color: var(--trend); }
 .guide-table tr.no_signal .ico, .guide-table tr.no_signal .lab { color: var(--nosig); }
+.guide-table tr.no_decision .ico, .guide-table tr.no_decision .lab { color: var(--nosig); }
 .guide-table tr.detached .ico, .guide-table tr.detached .lab { color: var(--det); }
 .guide-table tr.low_battery .ico, .guide-table tr.low_battery .lab { color: var(--bat); }
 .guide-table tr.ok .ico, .guide-table tr.ok .lab { color: var(--ok); }

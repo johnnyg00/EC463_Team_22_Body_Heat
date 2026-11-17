@@ -12,6 +12,9 @@ STATES = [
     ("absolute",       "Above team temperature setting", "▲"),
     ("trend",          "Rising faster than team setting", "↗"),
     ("no_signal",      f"No signal for {NO_SIGNAL_AFTER_S} s", "⊘"),
+    # Not in Table F2 yet: proposed for the real pod (TempMonitor), whose alert
+    # decision can be unavailable while readings still arrive. Needs F owner sign-off.
+    ("no_decision",    "Pod decision unavailable",        "?"),
     ("detached",       "Pod not on skin",                 "◌"),
     ("low_battery",    "Replace batteries",               "▭"),
     ("ok",             "OK",                              "✓"),
@@ -24,6 +27,8 @@ BADGE_LABELS = {
     "low_battery": "Replace batteries",
     "detached": "Pod not on skin",
     "no_signal": "No signal",
+    "no_decision": "Pod decision unavailable",
+    "trend_warmup": "Rising check not ready yet",
     "alert": "Alert active",
     "alerts_only": "Alerts only",
     "resume": "Back below team setting",
@@ -73,6 +78,7 @@ STAFF_GUIDANCE = {
     "absolute": "Readings are above the team-set limit; staff review requested.",
     "trend": "Readings show a trend above the team-set limit; staff review requested.",
     "no_signal": "Check the pod is switched on and within range of this screen.",
+    "no_decision": "This is not an OK. Check the pod is powered and its skin sensor is connected.",
     "detached": "Check the pod strap is snug against the skin.",
     "low_battery": "Swap the batteries at the next break.",
     "ok": "Nothing to do.",
@@ -83,6 +89,7 @@ WEARER_GUIDANCE = {
     "absolute": "Your readings are above the team-set limit. Your staff can see this too.",
     "trend": "Your readings are rising faster than the team-set limit. Your staff can see this too.",
     "no_signal": "Your pod is not reaching the sideline screen. Check it is switched on.",
+    "no_decision": "Your pod has no current decision right now. Your staff can see this too.",
     "detached": "Your pod may have slipped. Snug the strap against your skin.",
     "low_battery": "Swap your pod batteries at the next break.",
     "ok": "You are within your team's settings.",
@@ -93,6 +100,7 @@ STATE_MEANING = {
     "absolute": "Skin temperature is above the limit your team chose.",
     "trend": "Skin temperature is climbing faster than the rate your team chose.",
     "no_signal": "No packet from this pod for a minute. Last values are shown greyed.",
+    "no_decision": "Readings may still arrive, but the pod has no current decision of its own: it is starting up, its sensor reported a fault, or the link dropped.",
     "detached": "The pod's contact ring is not touching skin, so it pauses its temperature decisions.",
     "low_battery": "The pod reports its batteries are low.",
     "ok": "Readings are arriving and the pod reports nothing to flag.",
@@ -150,6 +158,8 @@ def primary_state(hub, device_id, t):
         return "trend"
     if hub.no_signal(device_id, t):
         return "no_signal"
+    if device_id in getattr(hub, "decision_unavailable", ()):
+        return "no_decision"
     if not state.skin_contact:
         return "detached"
     if hub.low_battery.get(device_id):
@@ -178,6 +188,10 @@ def build_tile(hub, member, t, *, staff=True):
             badges.append("no_signal")
         if not state.skin_contact and primary != "detached":
             badges.append("detached")
+        if primary in ("absolute", "trend") and dev in getattr(hub, "decision_unavailable", ()):
+            badges.append("no_decision")    # the alert shown is the last one the pod decided
+        if primary == "ok" and dev in getattr(hub, "trend_warmup", ()):
+            badges.append("trend_warmup")   # OK covers the temperature limit only, until the window fills
     if hub.low_battery.get(dev) and primary != "low_battery" and primary != "not_collecting":
         badges.append("low_battery")
     if dev in hub.acked and state.alert:
@@ -206,6 +220,7 @@ def build_tile(hub, member, t, *, staff=True):
         "measurement_age_s": m_age,
         "greyed": primary in ("no_signal", "not_collecting"),
         "alerts_only": dev in hub.alerts_only,
+        "live_pod": dev in {c.device_id for c in getattr(hub, "collectors", ())},
     }
 
     if staff and getattr(hub, "analysis_enabled", hub.analyzer is not None) and hub.is_consented(dev):
@@ -242,6 +257,8 @@ def build_alert_strip(hub, roster, t):
                 "since_s": t - (state.alert_since if state.alert_since is not None else t),
                 "acknowledged": ack is not None,
                 "ack_by": ack[1] if ack else None, "ack_t": ack[0] if ack else None,
+                # held alert: the last one the pod decided, not a current decision
+                "decision_unavailable": dev in getattr(hub, "decision_unavailable", ()),
             })
     rows.sort(key=lambda r: (r["acknowledged"], r["since_s"]))
     return rows
@@ -259,8 +276,8 @@ def build_notices(hub, roster, t):
     return out
 
 
-def build_status(hub, t, storage):
-    return {
+def build_status(hub, t, storage, *, staff=True):
+    status = {
         "t": t,
         "accepted": hub.accepted,
         "rejections": dict(hub.rejections),
@@ -268,3 +285,6 @@ def build_status(hub, t, storage):
         "ignored_duplicates": storage.ignored_duplicates,
         "storage_fault": hub.storage_fault,
     }
+    if staff:   # radio link details are for staff screens only
+        status["collectors"] = [c.status() for c in getattr(hub, "collectors", ())]
+    return status

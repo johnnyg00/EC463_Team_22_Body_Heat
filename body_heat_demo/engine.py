@@ -134,6 +134,7 @@ class Engine:
         self.autoplay = autoplay
         self.air_c, self.humidity_pct = 31.0, 58.0
         self.log = []                   # presenter-visible event log
+        self.external = set()           # device_ids fed by a real pod (pod_bridge), not synthesized
         self._lock = threading.Lock()
         self._stop = threading.Event()
         rng = random.Random(22)
@@ -162,6 +163,8 @@ class Engine:
         rng = random.Random(7)
         start = -minutes * 60
         for m in self.roster:
+            if m["device_id"] in self.external:
+                continue    # a real pod's chart shows only what it actually sent
             pod = self.pods[m["device_id"]]
             for t in range(start, 0, MEASURE_EVERY_S):
                 frac = (t - start) / (-start)
@@ -238,6 +241,23 @@ class Engine:
         self.log.append({"t": t, "action": action, "jersey": jersey, "user": user})
         return {"ok": True, "t": t, "action": action, "jersey": jersey}
 
+    # -- real pods (pod_bridge) --------------------------------------------------
+    def ingest_external(self, pkt):
+        """One packet from a real pod's collector, through the same hub.accept the
+        synthetic pods use, on the session clock. Returns None or the reason."""
+        with self._lock:
+            try:
+                self.hub.accept(pkt, self.t)
+                return None
+            except Rejected as e:
+                return str(e)
+
+    def external_decision_unavailable(self, device_id, why):
+        """The collector knows the pod has no current decision (stale, fault, link
+        lost) without a packet to carry it. Not a reading: no-signal timing is kept."""
+        with self._lock:
+            self.hub.mark_decision_unavailable(device_id, self.t, why)
+
     def _inject(self, pkt, t):
         try:
             self.hub.accept(pkt, t)
@@ -255,6 +275,8 @@ class Engine:
                         self._control(action, jersey, "script")
             self.air_c += random.uniform(-0.02, 0.03)
             for dev, pod in self.pods.items():
+                if dev in self.external:
+                    continue
                 pkt = pod.broadcast(t, self.air_c, self.humidity_pct)
                 if pkt is None:
                     continue
@@ -283,8 +305,11 @@ class Engine:
 
 
 def build_demo(autoplay=True, seed_history=True, analyzer="deterministic", real_provider=False,
-               session_minutes=60):
+               session_minutes=60, external_devices=()):
     """Wire store + hub + accounts + engine with the fake roster.
+
+    external_devices: roster device_ids a real pod feeds (see pod_bridge); the
+    engine neither synthesizes packets nor seeds fake history for them.
 
     LLM call budgets are sized for a live session of session_minutes with the
     scaffold's own formula, not the 200 s replay scenario, so model analysis
@@ -317,6 +342,10 @@ def build_demo(autoplay=True, seed_history=True, analyzer="deterministic", real_
         accounts.add(f"athlete{m['jersey']:02d}", "demo", "athlete", m["full_name"], device_id=m["device_id"])
     hub.set_alerts_only("pod-03", True)     # jersey 3 asked for alerts-only (FR-013)
     engine = Engine(hub, store, roster, autoplay=autoplay)
+    unknown = set(external_devices) - {m["device_id"] for m in roster}
+    if unknown:
+        raise ValueError(f"not on the roster: {sorted(unknown)}")
+    engine.external.update(external_devices)
     if seed_history:
         engine.seed_history()
     return store, hub, accounts, roster, engine
